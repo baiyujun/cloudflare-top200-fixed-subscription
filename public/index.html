@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloudflare Top200 Fixed Subscription</title>
+    <meta
+      name="description"
+      content="单 Worker 固定订阅发布器。点击开始后按 Project 1 思路产出 Top200 优选 IP，并直接覆盖更新固定订阅链接。"
+    />
+    <link rel="icon" href="/icons/auto.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Single Worker · Static UI · KV · Fixed Subscription</p>
+          <h1 id="uiTitle">Cloudflare Top200 Fixed Subscription</h1>
+          <p class="hero-text">
+            保留 `WorkerVless2sub` 的大候选池和优选思路，但所有最终输出统一改为
+            <strong>Top200 / 最优 200 个 IP</strong>。点击一次开始，自动覆盖固定订阅链接。
+          </p>
+          <div class="hero-actions">
+            <button id="startBtn" type="button">开始 Top200 优选</button>
+            <span id="startHint" class="inline-hint">成功后回到 Clash / v2ray / Shadowrocket 点击“更新订阅”。</span>
+          </div>
+        </div>
+
+        <aside class="hero-side">
+          <div class="hero-chip">
+            <span>固定链接</span>
+            <strong>/sub/fixed</strong>
+          </div>
+          <div class="hero-chip">
+            <span>目标规模</span>
+            <strong>Top200</strong>
+          </div>
+          <div class="hero-chip">
+            <span>部署方式</span>
+            <strong>Cloudflare Workers</strong>
+          </div>
+        </aside>
+      </section>
+
+      <section class="grid-shell">
+        <div class="main-column">
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Run Status</p>
+                <h2>当前状态</h2>
+              </div>
+              <button id="refreshBtn" type="button" class="ghost-button">刷新</button>
+            </div>
+
+            <div class="stats-grid">
+              <article class="stat-card">
+                <span class="stat-label">状态</span>
+                <strong id="runState">idle</strong>
+                <small id="runMessage">尚未执行 Top200 优选。</small>
+              </article>
+              <article class="stat-card">
+                <span class="stat-label">当前 preferredCount</span>
+                <strong id="preferredCount">0</strong>
+                <small>固定订阅当前写入数量</small>
+              </article>
+              <article class="stat-card">
+                <span class="stat-label">基础节点</span>
+                <strong id="inputNodeCount">0</strong>
+                <small id="projectedOutput">预计输出节点 0</small>
+              </article>
+              <article class="stat-card">
+                <span class="stat-label">最近更新时间</span>
+                <strong id="lastOptimizedAt">未执行</strong>
+                <small id="tlsMode">优选模式待定</small>
+              </article>
+            </div>
+
+            <div id="flashBox" class="flash hidden"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Fixed URLs</p>
+                <h2>固定订阅链接</h2>
+              </div>
+            </div>
+
+            <div class="url-stack">
+              <label class="url-row">
+                <span>自动识别</span>
+                <div class="url-actions">
+                  <input id="fixedAutoUrl" readonly />
+                  <button data-copy="fixedAutoUrl" type="button" class="ghost-button small">复制</button>
+                </div>
+              </label>
+              <label class="url-row">
+                <span>Raw / v2rayN / Shadowrocket</span>
+                <div class="url-actions">
+                  <input id="fixedRawUrl" readonly />
+                  <button data-copy="fixedRawUrl" type="button" class="ghost-button small">复制</button>
+                </div>
+              </label>
+              <label class="url-row">
+                <span>Clash / Mihomo</span>
+                <div class="url-actions">
+                  <input id="fixedClashUrl" readonly />
+                  <button data-copy="fixedClashUrl" type="button" class="ghost-button small">复制</button>
+                </div>
+              </label>
+              <label class="url-row">
+                <span>Surge</span>
+                <div class="url-actions">
+                  <input id="fixedSurgeUrl" readonly />
+                  <button data-copy="fixedSurgeUrl" type="button" class="ghost-button small">复制</button>
+                </div>
+              </label>
+            </div>
+
+            <p id="subTokenHint" class="note">
+              如果配置了 `SUB_ACCESS_TOKEN`，上面展示的是带 token 的完整固定订阅链接。
+            </p>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Base Nodes</p>
+                <h2>基础节点配置</h2>
+              </div>
+            </div>
+
+            <form id="baseForm" class="form-stack">
+              <label>
+                <span>名称前缀</span>
+                <input id="namePrefix" name="namePrefix" type="text" placeholder="Default" />
+              </label>
+
+              <label>
+                <span>基础节点订阅 / 原始节点</span>
+                <textarea
+                  id="nodeLinks"
+                  name="nodeLinks"
+                  rows="10"
+                  placeholder="支持 vmess:// / vless:// / trojan://，也支持直接粘贴原始 Base64 订阅内容。"
+                ></textarea>
+              </label>
+
+              <label class="checkbox-card">
+                <input id="keepOriginalHost" name="keepOriginalHost" type="checkbox" checked />
+                <span>保留原始 Host / SNI</span>
+              </label>
+
+              <div class="button-row">
+                <button id="saveBaseBtn" type="submit" class="secondary-button">保存基础节点</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Latest Top200</p>
+                <h2>最近一次执行摘要</h2>
+              </div>
+            </div>
+
+            <div id="previewMeta" class="note">暂无最近一次 Top200 执行结果。</div>
+            <details class="details-card">
+              <summary>展开查看当前 Top200 preferredIps</summary>
+              <ol id="preferredList" class="preferred-list"></ol>
+            </details>
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel accent-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Admin</p>
+                <h2>写入鉴权</h2>
+              </div>
+            </div>
+
+            <form id="tokenForm" class="form-stack">
+              <label>
+                <span>ADMIN_TOKEN</span>
+                <input id="adminToken" type="password" placeholder="仅保存在当前浏览器 localStorage" />
+              </label>
+              <div class="button-row">
+                <button id="saveTokenBtn" type="submit" class="secondary-button">保存令牌</button>
+                <button id="clearTokenBtn" type="button" class="ghost-button">清除</button>
+              </div>
+            </form>
+            <p class="note">
+              页面源码里不会硬编码 secret。保存后，`/api/save-base`、`/api/start`、`/api/update-preferred`
+              都会带上 `Authorization: Bearer ...`。
+            </p>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Flow</p>
+                <h2>使用方式</h2>
+              </div>
+            </div>
+            <ol class="flat-list">
+              <li>首次保存一次基础节点。</li>
+              <li>之后手机打开网页，点击“开始 Top200 优选”。</li>
+              <li>等待显示“已更新成功”。</li>
+              <li>回到客户端点击“更新订阅”。</li>
+            </ol>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
