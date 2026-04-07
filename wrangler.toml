@@ -1,15 +1,15 @@
-name = "cloudflaresub"
+name = "cloudflare-top200-fixed-subscription"
 main = "src/worker.js"
 compatibility_date = "2026-03-06"
 workers_dev = true
 
 [[kv_namespaces]]
 binding = "SUB_STORE"
-id = "REPLACE_WITH_PRODUCTION_KV_ID"
-preview_id = "REPLACE_WITH_PREVIEW_KV_ID"
+id = "71a6252b0e69499a9d5561e41738b772"
+preview_id = "abde0d917d304026b26f819faaa44318"
 
 [assets]
 directory = "./public"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
+not_found_handling = "none"
 run_worker_first = ["/api/*", "/sub/*"]
