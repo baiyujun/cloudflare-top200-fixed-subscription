@@ -38,8 +38,9 @@
   - `ADDNOTLS`
   - `ADDNOTLSAPI`
   - `DLS`
-- 继续沿用“静态地址 + API 地址列表 + CSV 测速结果”的优选模型
-- 对 CSV 结果按速度优先、延迟次优进行排序
+- 但默认主路径不再是“小 seed 合并后直接切片”
+- 改为先按 `CloudflareSpeedTest` 的 `ip.txt` IPv4 段在运行时生成几千级候选池
+- 再把 `ADD` / `ADDAPI` / `ADDCSV` 作为补充提示层参与排序
 - 最终结果统一收口到 Top200，而不是 Top10
 
 ### Project 2 在本项目中的职责
@@ -84,9 +85,13 @@ cloudflaresub/
 │  └─ seed/
 │     ├─ addressesapi.txt
 │     ├─ addressesipv6api.txt
-│     └─ addressescsv.csv
+│     ├─ addressescsv.csv
+│     ├─ CloudflareSpeedTest.csv
+│     ├─ ip.txt
+│     └─ ipv6.txt
 ├─ src/
 │  ├─ auth.js
+│  ├─ candidate-pool.js
 │  ├─ core.js
 │  ├─ fixed.js
 │  ├─ http.js
@@ -96,16 +101,60 @@ cloudflaresub/
 │  └─ worker.js
 ├─ tests/
 │  ├─ helpers/mock-env.mjs
+│  ├─ api-status.test.mjs
+│  ├─ candidate-pool.test.mjs
 │  ├─ fixed.test.mjs
+│  ├─ fixed-subscription.test.mjs
 │  ├─ frontend.test.mjs
 │  ├─ regression-top200.test.mjs
+│  ├─ regression-runtime-pool.test.mjs
 │  └─ smoke.test.mjs
 ├─ wrangler.toml
 ├─ package.json
 └─ README.md
 ```
 
-`public/` 里的页面与 seed 候选数据会一起通过 Workers Static Assets 部署到云端。
+`public/` 里的页面与候选源数据会一起通过 Workers Static Assets 部署到云端。
+
+## 候选生成层为什么现在能到几千
+
+之前只有几百，是因为旧实现的 `/api/start` 主要依赖：
+
+- `addressesapi.txt`
+- `addressesipv6api.txt`
+- `addressescsv.csv`
+- `CloudflareSpeedTest.csv`
+
+这些文件里本质上是“少量现成地址 + 少量测速结果”，即便合并去重后也只是几百级到一两千级，不是原版视频里那种“先展开近 6000 个待测地址，再筛出最优结果”的流程。
+
+现在默认模式改成了：
+
+- `CANDIDATE_MODE=hybrid`
+- 先读取 `public/seed/ip.txt`
+- 按 `CloudflareSpeedTest` 的 IPv4 段思路，为每个 `/24` 桶生成 1 个运行时样本 IP
+- 这一步默认能得到接近 `5955` 的候选池规模
+- 再把 `ADD` / `ADDAPI` / `ADDCSV` 当作提示层，为这些运行时样本提供速度/延迟/分桶打分参考
+- 最后只发布 Top200
+
+也就是说：
+
+- 以前是“小 seed -> dedupe -> slice(0, 200)`
+- 现在是“Cloudflare IPv4 段运行时展开到几千级 -> 打分排序 -> Top200”
+
+## 与原版 CloudflareSpeedTest 的差异
+
+这份 Worker 版本尽量复用了 `CloudflareSpeedTest` 的 IP 段展开思路，但没有在 Worker 里完整复刻它的 TCP/下载测速过程。
+
+原因是 Cloudflare Workers 免费套餐存在两个现实限制：
+
+- 没有原生的原始 TCP 批量测速能力
+- 单请求内不适合发起数千级子请求去完整探测每个候选 IP
+
+所以本项目当前实现采用的是“最接近原版规模的可运行替代方案”：
+
+- 候选池规模与原版一致地进入几千级
+- 借助 `ADDCSV` / `CloudflareSpeedTest.csv` / `ADDAPI` 等补充来源，对运行时样本池做提示排序
+- 最终仍然只写入 200 条 preferredIps 到固定订阅
 
 ## 固定订阅模式如何工作
 
@@ -121,13 +170,16 @@ KV 中维护一个固定记录：
     "1.2.3.5:443#B"
   ],
   "preferredCount": 200,
+  "candidateCount": 5955,
+  "candidateMode": "hybrid",
   "lastOptimizedAt": 1712345678901,
   "updatedFrom": "project1-web-optimize",
   "latestRunStatus": {
     "state": "success",
     "message": "Top200 优选完成，已更新固定订阅。",
     "preferredCount": 200,
-    "candidateCount": 543,
+    "candidateCount": 5955,
+    "candidateMode": "hybrid",
     "tlsMode": "tls"
   }
 }
@@ -146,8 +198,9 @@ KV 中维护一个固定记录：
 本项目不再保留任何默认 Top10 收口逻辑，统一使用：
 
 - 常量 `TOP200_LIMIT = 200`
-- `/api/start` 强制要求最终候选数不少于 200，否则直接失败
+- `/api/start` 默认先生成几千级运行时候选池
 - 成功写入时只会覆盖最新 Top200 preferredIps
+- 如果当前可用候选不足 200，则会“有多少写多少”，不再因为不足 200 直接报错
 - 回归测试明确断言：
   - `/api/start` 返回 `preferredCount === 200`
   - `GET /api/status` 返回 `preferredIps.length === 200`
@@ -201,7 +254,8 @@ KV 中维护一个固定记录：
 
 - `POST /api/start`
   - 执行 Project 1 风格的优选流程
-  - 自动读取候选池
+  - 默认先按 Cloudflare IPv4 段运行时构造几千级候选池
+  - 再把 seed / CSV / API 数据作为补充打分参考
   - 计算 Top200 preferredIps
   - 直接覆盖写入固定订阅记录
 
@@ -248,6 +302,12 @@ KV 中维护一个固定记录：
 
 兼容 Project 1 候选池配置：
 
+- `CANDIDATE_MODE`
+- `TARGET_CANDIDATE_COUNT`
+- `MAX_CANDIDATES_PER_CIDR`
+- `ENABLE_IPV6`
+- `CF_IPV4_RANGE_SOURCES`
+- `CF_IPV6_RANGE_SOURCES`
 - `ADD`
 - `ADDAPI`
 - `ADDCSV`
@@ -258,7 +318,12 @@ KV 中维护一个固定记录：
 
 说明：
 
-- 如果没有配置 `ADDAPI` / `ADDCSV`，会默认读取 `public/seed/` 内置候选源
+- `CANDIDATE_MODE` 默认值是 `hybrid`
+- `TARGET_CANDIDATE_COUNT` 默认值是 `6000`
+- `MAX_CANDIDATES_PER_CIDR` 默认值是 `4096`
+- `ENABLE_IPV6` 默认值是 `false`
+- 如果没有配置 `CF_IPV4_RANGE_SOURCES`，会默认读取 `public/seed/ip.txt`
+- 如果没有配置 `ADDAPI` / `ADDCSV`，会默认读取 `public/seed/` 内置补充源
 - `DLS` 默认值为 `7`
 - `CSVREMARK` 默认值为 `1`
 
@@ -270,7 +335,7 @@ KV 中维护一个固定记录：
 [assets]
 directory = "./public"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
+not_found_handling = "none"
 run_worker_first = ["/api/*", "/sub/*"]
 ```
 
@@ -314,6 +379,12 @@ npx wrangler secret put UI_TITLE
 
 如果你希望覆盖内置候选池，也可以添加：
 
+- `CANDIDATE_MODE`
+- `TARGET_CANDIDATE_COUNT`
+- `MAX_CANDIDATES_PER_CIDR`
+- `ENABLE_IPV6`
+- `CF_IPV4_RANGE_SOURCES`
+- `CF_IPV6_RANGE_SOURCES`
 - `ADD`
 - `ADDAPI`
 - `ADDCSV`
@@ -368,23 +439,34 @@ npm run deploy
 需要注意：
 
 - 如果你把 `ADDAPI` / `ADDCSV` 指向很多外部源，请控制数量与响应时间
-- 免费套餐下不适合把优选流程做成超长时间、超高并发的任务
-- 本项目默认内置一份 seed CSV 和 seed TXT，开箱即可产出 Top200
+- 免费套餐下不适合在单次 Worker 请求里完整复刻 `CloudflareSpeedTest` 的数千次 TCP 探测
+- 本项目默认内置 `ip.txt`，会在运行时生成接近 `5955` 的 IPv4 候选池
+- 真正发布到固定订阅里的仍然只有 Top200，不会把几千条全部写入客户端
 
 ## 测试覆盖
 
 已包含以下测试：
 
+- 候选生成层
+  - `candidate-pool.test.mjs`
+  - 断言运行时候选池进入几千级，不再是几百
+- 运行时池回归
+  - `regression-runtime-pool.test.mjs`
+  - 防止默认路径退回 `seed_only`
 - 节点解析
   - `vmess`
   - `vless`
   - `trojan`
   - Base64 展开
 - 固定订阅流程
+  - `fixed-subscription.test.mjs`
   - `save-base`
   - `update-preferred`
   - `status`
   - `/sub/fixed`
+- 状态接口
+  - `api-status.test.mjs`
+  - 断言 `candidateCount` 和 `candidateMode`
 - 旧模式回归
   - `/api/generate`
   - `/sub/:id`

@@ -8,6 +8,8 @@ export function createDefaultFixedRecord() {
     keepOriginalHost: true,
     preferredIps: [],
     preferredCount: 0,
+    candidateCount: 0,
+    candidateMode: 'hybrid',
     preferredPreview: [],
     lastOptimizedAt: null,
     updatedFrom: '',
@@ -18,6 +20,7 @@ export function createDefaultFixedRecord() {
       finishedAt: null,
       preferredCount: 0,
       candidateCount: 0,
+      candidateMode: 'hybrid',
       tlsMode: 'tls',
     },
   };

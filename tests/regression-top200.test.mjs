@@ -14,7 +14,9 @@ function adminHeaders(env, contentType = 'application/json') {
 }
 
 test('api/start really writes Top200 instead of Top10', async () => {
-  const env = createTestEnv();
+  const env = createTestEnv({
+    CANDIDATE_RANDOM_SEED: 'regression-top200-test',
+  });
 
   await callWorker(worker, env, '/api/save-base', {
     method: 'POST',
@@ -36,7 +38,8 @@ test('api/start really writes Top200 instead of Top10', async () => {
   const startJson = await start.json();
   assert.equal(startJson.ok, true);
   assert.equal(startJson.preferredCount, 200);
-  assert.ok(startJson.candidateCount >= 200);
+  assert.ok(startJson.candidateCount >= 5000);
+  assert.equal(startJson.candidateMode, 'hybrid');
 
   const status = await callWorker(worker, env, '/api/status', {
     headers: {
@@ -46,6 +49,8 @@ test('api/start really writes Top200 instead of Top10', async () => {
   const statusJson = await status.json();
   assert.equal(statusJson.preferredIps.length, 200);
   assert.equal(statusJson.preferredCount, 200);
+  assert.ok(statusJson.candidateCount >= 5000);
+  assert.equal(statusJson.candidateMode, 'hybrid');
   assert.equal(statusJson.latestRunStatus.state, 'success');
 
   const fixedRaw = await callWorker(
@@ -127,5 +132,6 @@ test('api/start falls back to available candidates when less than 200 exist', as
   assert.equal(startJson.ok, true);
   assert.equal(startJson.preferredCount, 2);
   assert.equal(startJson.candidateCount, 2);
+  assert.equal(startJson.candidateMode, 'hybrid');
   assert.match(startJson.message, /仅找到 2 条/);
 });

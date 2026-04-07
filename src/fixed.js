@@ -101,6 +101,8 @@ export async function handleUpdatePreferred(request, env, url) {
     ...record,
     preferredIps: truncated,
     preferredCount: truncated.length,
+    candidateCount: truncated.length,
+    candidateMode: 'manual',
     preferredPreview: summarizePreferred(truncated),
     lastOptimizedAt,
     updatedFrom: String(body.source || 'manual-api').trim() || 'manual-api',
@@ -111,6 +113,7 @@ export async function handleUpdatePreferred(request, env, url) {
       finishedAt: new Date(lastOptimizedAt).toISOString(),
       preferredCount: truncated.length,
       candidateCount: truncated.length,
+      candidateMode: 'manual',
       tlsMode: record.latestRunStatus.tlsMode || 'tls',
     },
   }));
@@ -157,6 +160,7 @@ export async function handleStart(request, env, url) {
       finishedAt: null,
       preferredCount: current.preferredCount,
       candidateCount: 0,
+      candidateMode: current.candidateMode || current.latestRunStatus.candidateMode || 'hybrid',
     },
   }));
 
@@ -172,6 +176,8 @@ export async function handleStart(request, env, url) {
       ...current,
       preferredIps: optimized.preferredIps,
       preferredCount: optimized.preferredIps.length,
+      candidateCount: optimized.totalCandidates,
+      candidateMode: optimized.candidateMode,
       preferredPreview: optimized.preferredPreview,
       lastOptimizedAt,
       updatedFrom: 'project1-web-optimize',
@@ -182,6 +188,7 @@ export async function handleStart(request, env, url) {
         finishedAt: new Date(lastOptimizedAt).toISOString(),
         preferredCount: optimized.preferredIps.length,
         candidateCount: optimized.totalCandidates,
+        candidateMode: optimized.candidateMode,
         tlsMode: optimized.tlsMode,
       },
     }));
@@ -194,6 +201,7 @@ export async function handleStart(request, env, url) {
           : `已更新成功，但当前仅找到 ${optimized.preferredIps.length} 条可用优选结果。`,
       preferredCount: optimized.preferredIps.length,
       candidateCount: optimized.totalCandidates,
+      candidateMode: optimized.candidateMode,
       inputNodeCount: parsedNodes.nodes.length,
       projectedOutputNodeCount: parsedNodes.nodes.length * optimized.preferredIps.length,
       fixedUrls: buildFixedUrls(url.origin, env.SUB_ACCESS_TOKEN || '', true),
@@ -282,6 +290,8 @@ function buildFixedStatus(record, origin, accessToken, includeSensitive, uiTitle
     uiTitle,
     hasNodeLinks: Boolean(record.nodeLinks),
     preferredCount: record.preferredCount || 0,
+    candidateCount: record.candidateCount || record.latestRunStatus?.candidateCount || 0,
+    candidateMode: record.candidateMode || record.latestRunStatus?.candidateMode || 'hybrid',
     lastOptimizedAt: record.lastOptimizedAt,
     latestRunStatus: record.latestRunStatus,
     inputNodeCount,

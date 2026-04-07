@@ -23,6 +23,8 @@ export function bootstrapApp(options = {}) {
     runMessage: doc.getElementById('runMessage'),
     preferredCount: doc.getElementById('preferredCount'),
     inputNodeCount: doc.getElementById('inputNodeCount'),
+    candidateCount: doc.getElementById('candidateCount'),
+    candidateMode: doc.getElementById('candidateMode'),
     projectedOutput: doc.getElementById('projectedOutput'),
     lastOptimizedAt: doc.getElementById('lastOptimizedAt'),
     tlsMode: doc.getElementById('tlsMode'),
@@ -211,6 +213,8 @@ export function bootstrapApp(options = {}) {
     elements.runMessage.textContent = data.latestRunStatus?.message || '尚未执行。';
     elements.preferredCount.textContent = String(data.preferredCount || 0);
     elements.inputNodeCount.textContent = String(data.inputNodeCount || 0);
+    elements.candidateCount.textContent = String(data.candidateCount || 0);
+    elements.candidateMode.textContent = `运行模式：${data.candidateMode || data.latestRunStatus?.candidateMode || 'hybrid'}`;
     elements.projectedOutput.textContent = `预计输出节点 ${data.projectedOutputNodeCount || 0}`;
     elements.lastOptimizedAt.textContent = formatTime(data.lastOptimizedAt);
     elements.tlsMode.textContent = `优选模式：${data.latestRunStatus?.tlsMode || 'tls'}`;
@@ -244,7 +248,7 @@ export function bootstrapApp(options = {}) {
       .map((line) => `<li>${escapeHtml(line)}</li>`)
       .join('');
     elements.previewMeta.textContent = preferredIps.length
-      ? `当前固定订阅已保存 ${preferredIps.length} 条 Top200 preferredIps。`
+      ? `当前固定订阅已保存 ${preferredIps.length} 条 Top200 preferredIps，本次候选池总数 ${data.candidateCount || 0}。`
       : '暂无 Top200 结果。保存基础节点后点击“开始 Top200 优选”。';
   }
 

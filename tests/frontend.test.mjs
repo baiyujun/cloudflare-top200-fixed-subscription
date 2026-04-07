@@ -21,6 +21,8 @@ test('frontend start button triggers fixed Top200 update flow', async () => {
         uiTitle: 'Top200 Test Console',
         hasNodeLinks: true,
         preferredCount: 0,
+        candidateCount: 5955,
+        candidateMode: 'hybrid',
         inputNodeCount: 1,
         projectedOutputNodeCount: 0,
         fixedUrls: {
@@ -33,6 +35,7 @@ test('frontend start button triggers fixed Top200 update flow', async () => {
         latestRunStatus: {
           state: 'idle',
           message: '等待执行',
+          candidateMode: 'hybrid',
           tlsMode: 'tls',
         },
         keepOriginalHost: true,
@@ -50,6 +53,8 @@ test('frontend start button triggers fixed Top200 update flow', async () => {
           uiTitle: 'Top200 Test Console',
           hasNodeLinks: true,
           preferredCount: 200,
+          candidateCount: 5955,
+          candidateMode: 'hybrid',
           inputNodeCount: 1,
           projectedOutputNodeCount: 200,
           fixedUrls: {
@@ -62,6 +67,7 @@ test('frontend start button triggers fixed Top200 update flow', async () => {
           latestRunStatus: {
             state: 'success',
             message: 'Top200 优选完成，已更新固定订阅。',
+            candidateMode: 'hybrid',
             tlsMode: 'tls',
           },
           keepOriginalHost: true,
@@ -110,6 +116,8 @@ test('frontend start button triggers fixed Top200 update flow', async () => {
   assert.ok(startCall);
   assert.equal(startCall.headers.authorization, 'Bearer admin-token-123456');
   assert.equal(dom.window.document.getElementById('preferredCount').textContent, '200');
+  assert.equal(dom.window.document.getElementById('candidateCount').textContent, '5955');
+  assert.match(dom.window.document.getElementById('candidateMode').textContent, /hybrid/);
   assert.match(dom.window.document.getElementById('flashBox').textContent, /已更新成功/);
   assert.match(dom.window.document.getElementById('fixedRawUrl').value, /target=raw/);
 });
