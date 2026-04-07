@@ -54,7 +54,7 @@ export async function handleSaveBase(request, env, url) {
       ...record.latestRunStatus,
       message: record.preferredCount
         ? record.latestRunStatus.message
-        : '基础节点已保存，等待执行 Top200 优选。',
+        : '基础节点已保存，等待本地 CLI 执行 Top200 优选。',
     },
   }));
 
@@ -96,24 +96,31 @@ export async function handleUpdatePreferred(request, env, url) {
 
   const truncated = preferred.slice(0, TOP200_LIMIT);
   const lastOptimizedAt = normalizeTimestamp(body.lastOptimizedAt) || Date.now();
+  const source = String(body.source || 'manual-api').trim() || 'manual-api';
+  const candidateMode = normalizeCandidateMode(body.candidateMode, source);
+  const candidateCount = normalizeCount(body.candidateCount, truncated.length);
+  const testedCount = normalizeCount(body.testedCount, truncated.length);
+  const successMessage = buildUpdateMessage(source, truncated.length);
 
   const saved = await updateFixedRecord(env, (record) => ({
     ...record,
     preferredIps: truncated,
     preferredCount: truncated.length,
-    candidateCount: truncated.length,
-    candidateMode: 'manual',
+    candidateCount,
+    testedCount,
+    candidateMode,
     preferredPreview: summarizePreferred(truncated),
     lastOptimizedAt,
-    updatedFrom: String(body.source || 'manual-api').trim() || 'manual-api',
+    updatedFrom: source,
     latestRunStatus: {
       state: 'success',
-      message: `已写入 ${truncated.length} 条 preferredIps。`,
+      message: successMessage,
       startedAt: record.latestRunStatus.startedAt,
       finishedAt: new Date(lastOptimizedAt).toISOString(),
       preferredCount: truncated.length,
-      candidateCount: truncated.length,
-      candidateMode: 'manual',
+      candidateCount,
+      testedCount,
+      candidateMode,
       tlsMode: record.latestRunStatus.tlsMode || 'tls',
     },
   }));
@@ -155,11 +162,12 @@ export async function handleStart(request, env, url) {
     latestRunStatus: {
       ...current.latestRunStatus,
       state: 'running',
-      message: '正在执行 Top200 优选并写入固定订阅。',
+      message: '兼容模式 /api/start 正在执行。主流程已迁移到本地 CLI，请优先使用 client/run-update.sh 或 client/run-update.ps1。',
       startedAt: new Date().toISOString(),
       finishedAt: null,
       preferredCount: current.preferredCount,
       candidateCount: 0,
+      testedCount: current.testedCount || 0,
       candidateMode: current.candidateMode || current.latestRunStatus.candidateMode || 'hybrid',
     },
   }));
@@ -177,17 +185,19 @@ export async function handleStart(request, env, url) {
       preferredIps: optimized.preferredIps,
       preferredCount: optimized.preferredIps.length,
       candidateCount: optimized.totalCandidates,
+      testedCount: optimized.preferredIps.length,
       candidateMode: optimized.candidateMode,
       preferredPreview: optimized.preferredPreview,
       lastOptimizedAt,
-      updatedFrom: 'project1-web-optimize',
+      updatedFrom: 'deprecated-web-start',
       latestRunStatus: {
         state: 'success',
-        message: `Top200 优选完成，已更新固定订阅。`,
+        message: '兼容模式 /api/start 已完成更新。主方案已迁移到本地 CLI，请优先使用 client/run-update.sh 或 client/run-update.ps1。',
         startedAt: current.latestRunStatus.startedAt,
         finishedAt: new Date(lastOptimizedAt).toISOString(),
         preferredCount: optimized.preferredIps.length,
         candidateCount: optimized.totalCandidates,
+        testedCount: optimized.preferredIps.length,
         candidateMode: optimized.candidateMode,
         tlsMode: optimized.tlsMode,
       },
@@ -195,12 +205,14 @@ export async function handleStart(request, env, url) {
 
     return json({
       ok: true,
+      deprecated: true,
       message:
         optimized.preferredIps.length >= TOP200_LIMIT
-          ? '已更新成功，请回到订阅软件点击“更新订阅”。'
-          : `已更新成功，但当前仅找到 ${optimized.preferredIps.length} 条可用优选结果。`,
+          ? '兼容模式 /api/start 已更新成功。主方案已迁移到本地 CLI，请改用 client/run-update.sh 或 client/run-update.ps1。'
+          : `兼容模式 /api/start 已更新成功，但当前仅找到 ${optimized.preferredIps.length} 条可用优选结果。主方案已迁移到本地 CLI。`,
       preferredCount: optimized.preferredIps.length,
       candidateCount: optimized.totalCandidates,
+      testedCount: optimized.preferredIps.length,
       candidateMode: optimized.candidateMode,
       inputNodeCount: parsedNodes.nodes.length,
       projectedOutputNodeCount: parsedNodes.nodes.length * optimized.preferredIps.length,
@@ -221,12 +233,12 @@ export async function handleStart(request, env, url) {
       latestRunStatus: {
         ...current.latestRunStatus,
         state: 'error',
-        message: error.message,
+        message: `/api/start 兼容模式失败：${error.message}`,
         finishedAt: failedAt,
       },
     }));
 
-    return json({ ok: false, error: error.message }, 500);
+    return json({ ok: false, deprecated: true, error: error.message }, 500);
   }
 }
 
@@ -288,9 +300,13 @@ function buildFixedStatus(record, origin, accessToken, includeSensitive, uiTitle
 
   const status = {
     uiTitle,
+    workflowMode: 'local-cli-first',
+    recommendedCommand: './client/run-update.sh',
+    startEndpointDeprecated: true,
     hasNodeLinks: Boolean(record.nodeLinks),
     preferredCount: record.preferredCount || 0,
     candidateCount: record.candidateCount || record.latestRunStatus?.candidateCount || 0,
+    testedCount: record.testedCount || record.latestRunStatus?.testedCount || 0,
     candidateMode: record.candidateMode || record.latestRunStatus?.candidateMode || 'hybrid',
     lastOptimizedAt: record.lastOptimizedAt,
     latestRunStatus: record.latestRunStatus,
@@ -355,4 +371,27 @@ function summarizePreferred(preferredIps) {
 function normalizeTimestamp(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function normalizeCount(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? '').trim(), 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function normalizeCandidateMode(value, source) {
+  const explicit = String(value || '').trim().toLowerCase();
+  if (explicit) {
+    return explicit;
+  }
+  if (/(termux|cli|local)/.test(String(source || '').toLowerCase())) {
+    return 'local-cli';
+  }
+  return 'manual';
+}
+
+function buildUpdateMessage(source, preferredCount) {
+  if (/(termux|cli|local)/.test(String(source || '').toLowerCase())) {
+    return `本地 CLI 优选完成，已写入 ${preferredCount} 条 preferredIps。`;
+  }
+  return `已写入 ${preferredCount} 条 preferredIps。`;
 }

@@ -1,94 +1,84 @@
 # Cloudflare Top200 Fixed Subscription
 
-基于两个现有开源项目整合而成：
+这个仓库现在的主方案是：
 
-- Project 1: [`cmliu/WorkerVless2sub`](https://github.com/cmliu/WorkerVless2sub)
-- Project 2: [`InfiCheesy/cloudflaresub`](https://github.com/InfiCheesy/cloudflaresub)
+- `Worker = 固定订阅发布层`
+- `本地 CLI = 主测速 / 主优选执行端`
+- `网页 = 状态页 / 辅助页`
 
-这个版本的目标只有三个：
+也就是说，真正决定最终 `Top200` 的，不再是网页，也不是 Worker，而是**你当前执行设备、当前网络**下运行的本地命令行。
 
-1. 把原先所有默认收口到 Top10 / 最优 10 个 IP 的思路，统一改成 Top200 / 最优 200 个 IP。
-2. 把 Project 2 改造成固定订阅链接发布器，主流程不再依赖每次生成新的短链。
-3. 提供一个真正可部署到 Cloudflare Workers 的网页控制台，点击一次“开始”就会执行优选并覆盖更新固定订阅内容。
+支持的本地执行环境：
 
-## 本次改造后的使用方式
+- Termux
+- Linux
+- macOS
+- Windows
 
-日常使用只有这几步：
-
-1. 打开网页控制台 `/`
-2. 点击“开始 Top200 优选”
-3. 等待页面提示“已更新成功”
-4. 回到 Clash / v2ray / Shadowrocket / Surge 点击“更新订阅”
-
-固定订阅链接始终不变：
+固定订阅链接仍然保持不变：
 
 - `/sub/fixed`
 - `/sub/fixed?target=raw`
 - `/sub/fixed?target=clash`
 - `/sub/fixed?target=surge`
 
-## Project 1 与 Project 2 的关系
+你每次只需要：
 
-### Project 1 在本项目中的职责
+1. 在本地设备执行一条命令
+2. 脚本在当前设备当前网络下完成测速和优选
+3. 自动把最终 Top200 推送到 Worker
+4. 回到订阅客户端点击“更新订阅”
 
-- 保留 `WorkerVless2sub` 的候选池来源思路：
-  - `ADD`
-  - `ADDAPI`
-  - `ADDCSV`
-  - `ADDNOTLS`
-  - `ADDNOTLSAPI`
-  - `DLS`
-- 但默认主路径不再是“小 seed 合并后直接切片”
-- 改为先按 `CloudflareSpeedTest` 的 `ip.txt` IPv4 段在运行时生成几千级候选池
-- 再把 `ADD` / `ADDAPI` / `ADDCSV` 作为补充提示层参与排序
-- 最终结果统一收口到 Top200，而不是 Top10
+## 当前架构
 
-### Project 2 在本项目中的职责
+### 本地 CLI 负责什么
 
-- 保留原有节点解析能力：
-  - `vmess`
-  - `vless`
-  - `trojan`
-  - Base64 订阅展开
-- 保留原有订阅渲染能力：
-  - Raw
-  - Clash
-  - Surge
-- 保留旧模式兼容：
-  - `POST /api/generate`
-  - `GET /sub/:id`
-- 新增固定订阅模式作为主流程：
-  - `POST /api/save-base`
-  - `POST /api/start`
-  - `POST /api/update-preferred`
-  - `GET /api/status`
-  - `GET /sub/fixed`
+- 获取候选池
+- 在当前设备当前网络下执行真实测速
+- 产出最终 Top200
+- 调用 Worker 的 `/api/update-preferred`
 
-## 与原版的核心区别
+### Worker 负责什么
 
-- 不再让用户手工粘贴 preferred IP 到生成器里做一次性短链。
-- 不再把主流程建立在 `/api/generate -> /sub/:id` 上。
-- 不再每次生成新的 shortId 给客户端重新导入。
-- 不再引入 `home / mobile / office` 之类的 profile。
-- 不再允许“先取 200 再二次挑 10”。
-- 固定订阅内容就是最终 Top200 preferredIps。
+- 保存基础节点
+- 保存最新 `preferredIps`
+- 提供固定订阅输出
+- 提供状态查询
+
+### 网页负责什么
+
+- 查看当前 fixed subscription 状态
+- 保存基础节点
+- 查看固定订阅链接
+- 提示使用本地 CLI
+
+网页不再是主优选入口，`/api/start` 只保留为兼容路径，并在状态和返回值中明确标记为 deprecated。
 
 ## 目录结构
 
 ```text
-cloudflaresub/
+cloudflare-top200-fixed-subscription/
+├─ client/
+│  ├─ bootstrap.sh
+│  ├─ bootstrap.ps1
+│  ├─ install-deps.sh
+│  ├─ lib.sh
+│  ├─ run-update.sh
+│  ├─ run-update.ps1
+│  ├─ config.example.env
+│  └─ README.md
 ├─ public/
 │  ├─ index.html
 │  ├─ app.js
 │  ├─ styles.css
 │  ├─ icons/
 │  └─ seed/
+│     ├─ ip.txt
+│     ├─ ipv6.txt
 │     ├─ addressesapi.txt
 │     ├─ addressesipv6api.txt
 │     ├─ addressescsv.csv
-│     ├─ CloudflareSpeedTest.csv
-│     ├─ ip.txt
-│     └─ ipv6.txt
+│     └─ CloudflareSpeedTest.csv
 ├─ src/
 │  ├─ auth.js
 │  ├─ candidate-pool.js
@@ -103,383 +93,276 @@ cloudflaresub/
 │  ├─ helpers/mock-env.mjs
 │  ├─ api-status.test.mjs
 │  ├─ candidate-pool.test.mjs
-│  ├─ fixed.test.mjs
+│  ├─ client-cli.test.mjs
 │  ├─ fixed-subscription.test.mjs
+│  ├─ fixed.test.mjs
 │  ├─ frontend.test.mjs
-│  ├─ regression-top200.test.mjs
 │  ├─ regression-runtime-pool.test.mjs
+│  ├─ regression-top200.test.mjs
 │  └─ smoke.test.mjs
 ├─ wrangler.toml
 ├─ package.json
 └─ README.md
 ```
 
-`public/` 里的页面与候选源数据会一起通过 Workers Static Assets 部署到云端。
+## 主流程
 
-## 候选生成层为什么现在能到几千
+### Unix / Linux / macOS / Termux
 
-之前只有几百，是因为旧实现的 `/api/start` 主要依赖：
-
-- `addressesapi.txt`
-- `addressesipv6api.txt`
-- `addressescsv.csv`
-- `CloudflareSpeedTest.csv`
-
-这些文件里本质上是“少量现成地址 + 少量测速结果”，即便合并去重后也只是几百级到一两千级，不是原版视频里那种“先展开近 6000 个待测地址，再筛出最优结果”的流程。
-
-现在默认模式改成了：
-
-- `CANDIDATE_MODE=hybrid`
-- 先读取 `public/seed/ip.txt`
-- 按 `CloudflareSpeedTest` 的 IPv4 段思路，为每个 `/24` 桶生成 1 个运行时样本 IP
-- 这一步默认能得到接近 `5955` 的候选池规模
-- 再把 `ADD` / `ADDAPI` / `ADDCSV` 当作提示层，为这些运行时样本提供速度/延迟/分桶打分参考
-- 最后只发布 Top200
-
-也就是说：
-
-- 以前是“小 seed -> dedupe -> slice(0, 200)`
-- 现在是“Cloudflare IPv4 段运行时展开到几千级 -> 打分排序 -> Top200”
-
-## 与原版 CloudflareSpeedTest 的差异
-
-这份 Worker 版本尽量复用了 `CloudflareSpeedTest` 的 IP 段展开思路，但没有在 Worker 里完整复刻它的 TCP/下载测速过程。
-
-原因是 Cloudflare Workers 免费套餐存在两个现实限制：
-
-- 没有原生的原始 TCP 批量测速能力
-- 单请求内不适合发起数千级子请求去完整探测每个候选 IP
-
-所以本项目当前实现采用的是“最接近原版规模的可运行替代方案”：
-
-- 候选池规模与原版一致地进入几千级
-- 借助 `ADDCSV` / `CloudflareSpeedTest.csv` / `ADDAPI` 等补充来源，对运行时样本池做提示排序
-- 最终仍然只写入 200 条 preferredIps 到固定订阅
-
-## 固定订阅模式如何工作
-
-KV 中维护一个固定记录：
-
-```json
-{
-  "namePrefix": "Default",
-  "nodeLinks": "vmess://...\nvless://...",
-  "keepOriginalHost": true,
-  "preferredIps": [
-    "1.2.3.4:443#A",
-    "1.2.3.5:443#B"
-  ],
-  "preferredCount": 200,
-  "candidateCount": 5955,
-  "candidateMode": "hybrid",
-  "lastOptimizedAt": 1712345678901,
-  "updatedFrom": "project1-web-optimize",
-  "latestRunStatus": {
-    "state": "success",
-    "message": "Top200 优选完成，已更新固定订阅。",
-    "preferredCount": 200,
-    "candidateCount": 5955,
-    "candidateMode": "hybrid",
-    "tlsMode": "tls"
-  }
-}
+```bash
+cd client
+cp config.example.env config.env
+./bootstrap.sh
+./run-update.sh
 ```
 
-读取 `/sub/fixed` 时，Worker 会：
+### Windows
 
-1. 从 KV 读出基础节点
-2. 从 KV 读出最新的 200 条 preferredIps
-3. 按 Project 2 的 expand / render 逻辑实时渲染为 Raw / Clash / Surge
-
-所以客户端看到的 URL 永远不变，变化的是 KV 中的内容。
-
-## Top10 -> Top200 的实现说明
-
-本项目不再保留任何默认 Top10 收口逻辑，统一使用：
-
-- 常量 `TOP200_LIMIT = 200`
-- `/api/start` 默认先生成几千级运行时候选池
-- 成功写入时只会覆盖最新 Top200 preferredIps
-- 如果当前可用候选不足 200，则会“有多少写多少”，不再因为不足 200 直接报错
-- 回归测试明确断言：
-  - `/api/start` 返回 `preferredCount === 200`
-  - `GET /api/status` 返回 `preferredIps.length === 200`
-  - `GET /sub/fixed` 对单基础节点渲染后得到 200 条输出
-
-## 路由说明
-
-### 页面
-
-- `GET /`
-  - 控制台页面
-  - 保存基础节点
-  - 查看固定订阅状态
-  - 一键执行 Top200 优选
-
-### 固定订阅模式
-
-- `GET /api/status`
-  - 返回当前固定订阅状态
-  - 未带管理员鉴权时返回公开摘要
-  - 带管理员鉴权时额外返回基础节点与完整 preferredIps
-
-- `POST /api/save-base`
-  - 保存基础节点与基础配置
-
-请求体示例：
-
-```json
-{
-  "namePrefix": "Default",
-  "nodeLinks": "vmess://...\nvless://...",
-  "keepOriginalHost": true
-}
+```powershell
+cd client
+Copy-Item config.example.env config.env
+powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
+powershell -ExecutionPolicy Bypass -File .\run-update.ps1
 ```
 
-- `POST /api/update-preferred`
-  - 直接覆盖固定订阅的 preferredIps
+### 日常使用
 
-请求体示例：
+1. 首次通过网页或 API 保存基础节点
+2. 在当前设备执行 `client/run-update.sh` 或 `client/run-update.ps1`
+3. 脚本本机测速并生成最新 Top200
+4. 脚本自动调用 `/api/update-preferred`
+5. 回到订阅客户端点击“更新订阅”
 
-```json
-{
-  "preferredIps": [
-    "1.2.3.4:443#A",
-    "1.2.3.5:443#B"
-  ],
-  "source": "project1-web-optimize",
-  "lastOptimizedAt": 1712345678901
-}
-```
+## 本地 CLI 如何工作
 
-- `POST /api/start`
-  - 执行 Project 1 风格的优选流程
-  - 默认先按 Cloudflare IPv4 段运行时构造几千级候选池
-  - 再把 seed / CSV / API 数据作为补充打分参考
-  - 计算 Top200 preferredIps
-  - 直接覆盖写入固定订阅记录
+本地 CLI 默认集成了 `CloudflareSpeedTest`：
+
+- 会自动为当前平台下载对应的 CFST 可执行文件
+- 默认读取 `public/seed/ip.txt`
+- 在当前设备当前网络下做延迟/下载测速
+- 默认生成 `Top200`
+- 把结果转换为 Worker 所需的 `preferredIps`
+
+默认候选模式：
+
+- `CANDIDATE_SOURCE_MODE=cfst_ipv4_ranges`
+
+这表示脚本主要使用 `CloudflareSpeedTest` 的 Cloudflare IPv4 段作为候选池来源。
+
+可选补充来源：
+
+- `ADD`
+- `ADDAPI`
+- `ADDCSV`
+
+它们会被当作补充候选输入，但只提取其中的 `IP / CIDR`。域名不会进入 CFST 本机测速流程。
+
+## 为什么现在改成本地 CLI
+
+之前把主流程放在网页 / Worker 里有一个根本问题：
+
+- Worker 或网页看到的不是你手机、你电脑、你当前网络的真实视角
+
+而你真正需要的是：
+
+- 在你**当前设备**
+- 通过你**当前网络**
+- 测出对你自己最有意义的优选结果
+
+所以这次改造把主职责纠正为：
+
+- 本地 CLI 做测速和优选
+- Worker 只做发布
+
+## Worker 路由
+
+### 主路由
 
 - `GET /sub/fixed`
 - `GET /sub/fixed?target=raw`
 - `GET /sub/fixed?target=clash`
 - `GET /sub/fixed?target=surge`
-  - 固定订阅读取入口
+- `POST /api/save-base`
+- `POST /api/update-preferred`
+- `GET /api/status`
 
-### 旧模式兼容
+### 兼容路由
 
+- `POST /api/start`
+  - 保留兼容
+  - 已标记 deprecated
+  - 不再作为 README / 页面中的主流程
 - `POST /api/generate`
 - `GET /sub/:id`
 
-这两个接口仍然保留，避免破坏原有短链使用方式，但不再是主流程。
+## /api/update-preferred
 
-## 鉴权
+本地 CLI 最终调用这个接口：
 
-### 订阅读取鉴权
+```json
+{
+  "preferredIps": [
+    "1.2.3.4:443#HKG",
+    "1.2.3.5:443#LAX"
+  ],
+  "source": "local-cli-optimize",
+  "candidateMode": "local-cli",
+  "candidateCount": 5955,
+  "testedCount": 218,
+  "lastOptimizedAt": 1712345678901
+}
+```
 
-通过 `SUB_ACCESS_TOKEN` 控制：
+Worker 会：
 
-- 未配置时：`/sub/fixed` 和 `/sub/:id` 可直接访问
-- 已配置时：必须带 `?token=...` 或 `Authorization: Bearer ...`
+1. 覆盖 fixed subscription 对应的 `preferredIps`
+2. 保持 `/sub/fixed` 链接不变
+3. 在 `/api/status` 中更新最近执行状态
 
-### 后台写入鉴权
+## 状态页定位
 
-通过 `ADMIN_TOKEN` 控制：
+`GET /` 现在只负责：
 
-- `POST /api/save-base`
-- `POST /api/update-preferred`
-- `POST /api/start`
+- 查看固定订阅链接
+- 查看 `preferredCount / candidateCount / testedCount / lastOptimizedAt`
+- 保存基础节点
+- 提示使用 `client/run-update.*`
 
-前端不会硬编码 secret。控制台页面使用浏览器 localStorage 保存你手工输入的 `ADMIN_TOKEN`，然后通过 `Authorization: Bearer ...` 调用 API。
+页面不会再把“点击开始优选”作为主流程。
 
-## 环境变量
+## 环境变量 / 配置
 
-至少建议配置：
+Worker 侧：
 
 - `SUB_STORE`
 - `SUB_ACCESS_TOKEN`
 - `ADMIN_TOKEN`
 - `UI_TITLE`
 
-兼容 Project 1 候选池配置：
+本地 CLI 侧主要配置见 [client/config.example.env](/home/hjy/cloudflaresub-publish/client/config.example.env)：
 
-- `CANDIDATE_MODE`
-- `TARGET_CANDIDATE_COUNT`
-- `MAX_CANDIDATES_PER_CIDR`
-- `ENABLE_IPV6`
-- `CF_IPV4_RANGE_SOURCES`
-- `CF_IPV6_RANGE_SOURCES`
+- `WORKER_BASE_URL`
+- `ADMIN_TOKEN`
+- `SUB_ACCESS_TOKEN`
+- `TOP_N=200`
+- `OUTPUT_FORMAT=clash`
+- `CANDIDATE_SOURCE_MODE`
 - `ADD`
 - `ADDAPI`
 - `ADDCSV`
-- `ADDNOTLS`
-- `ADDNOTLSAPI`
 - `DLS`
-- `CSVREMARK`
+- `KEEP_ORIGINAL_HOST=true`
 
-说明：
+以及 CFST 相关参数：
 
-- `CANDIDATE_MODE` 默认值是 `hybrid`
-- `TARGET_CANDIDATE_COUNT` 默认值是 `6000`
-- `MAX_CANDIDATES_PER_CIDR` 默认值是 `4096`
-- `ENABLE_IPV6` 默认值是 `false`
-- 如果没有配置 `CF_IPV4_RANGE_SOURCES`，会默认读取 `public/seed/ip.txt`
-- 如果没有配置 `ADDAPI` / `ADDCSV`，会默认读取 `public/seed/` 内置补充源
-- `DLS` 默认值为 `7`
-- `CSVREMARK` 默认值为 `1`
+- `LATENCY_THREADS`
+- `LATENCY_PING_COUNT`
+- `DOWNLOAD_TEST_COUNT`
+- `DOWNLOAD_TEST_SECONDS`
+- `TEST_PORT`
+- `TEST_URL`
+- `USE_HTTPING`
+- `HTTPING_STATUS_CODE`
+- `LATENCY_UPPER_MS`
+- `LATENCY_LOWER_MS`
+- `LOSS_RATE_UPPER`
+- `MIN_SPEED_MBPS`
+- `CF_COLO_FILTER`
+- `CFST_EXTRA_ARGS`
 
-## Workers Static Assets 说明
+## 安全说明
 
-`wrangler.toml` 已配置：
+- `ADMIN_TOKEN` 只用于写接口：
+  - `/api/save-base`
+  - `/api/update-preferred`
+  - `/api/start`
+- `SUB_ACCESS_TOKEN` 只用于订阅读取鉴权
+- 不要把这些 token 写死在公开代码里
+- `client/config.env` 建议不要提交到 Git
 
-```toml
-[assets]
-directory = "./public"
-binding = "ASSETS"
-not_found_handling = "none"
-run_worker_first = ["/api/*", "/sub/*"]
+## 与旧网页主方案的区别
+
+- 旧方案：网页 / Worker 负责主优选
+- 新方案：本地 CLI 负责主优选
+
+- 旧方案：测速视角偏向云端执行环境
+- 新方案：测速视角来自当前执行设备当前网络
+
+- 旧方案：页面像控制台
+- 新方案：页面只是状态页和辅助页
+
+## 固定订阅为什么保持不变
+
+固定不变的是 URL：
+
+- `/sub/fixed`
+
+变化的是 Worker KV 中保存的内容：
+
+- 基础节点
+- 最新 `preferredIps`
+- 最近更新时间
+- 最近执行状态
+
+所以客户端不需要重新导入订阅，只要点击“更新订阅”。
+
+## 测试
+
+```bash
+npm test
 ```
 
-含义：
+当前测试覆盖：
 
-- 页面与 seed 数据都由 `public/` 发布
-- `/api/*` 与 `/sub/*` 由 Worker 后端优先处理
-- 其余静态文件由 `ASSETS` 直接提供
+- 协议解析：
+  - `vmess`
+  - `vless`
+  - `trojan`
+  - Base64 订阅展开
+- fixed subscription 主链路：
+  - `save-base`
+  - `update-preferred`
+  - `status`
+  - `/sub/fixed`
+  - 固定 URL 不变
+- `/api/start` 兼容回归：
+  - 仍可用
+  - 已标记 deprecated
+- 本地 CLI：
+  - 配置解析默认值
+  - TopN 默认 200
+  - payload 生成
+  - `run-update.sh` 更新请求构造
+  - 错误处理
 
-## 部署方式
+## 部署
 
-### 1. 安装依赖
+### 安装依赖
 
 ```bash
 npm install
 ```
 
-### 2. 创建 KV Namespace
+### 配置 Cloudflare Worker
 
-在 Cloudflare Dashboard 或 Wrangler 中创建一个 KV：
-
-```bash
-npx wrangler kv namespace create SUB_STORE
-npx wrangler kv namespace create SUB_STORE --preview
-```
-
-然后把得到的 `id` 和 `preview_id` 填到 `wrangler.toml`。
-
-### 3. 配置 Secret / Variables
+1. 创建 KV Namespace
+2. 把 KV 绑定填入 `wrangler.toml`
+3. 配置 Worker secrets：
 
 ```bash
 npx wrangler secret put SUB_ACCESS_TOKEN
 npx wrangler secret put ADMIN_TOKEN
 ```
 
-可选普通变量：
-
-```bash
-npx wrangler secret put UI_TITLE
-```
-
-如果你希望覆盖内置候选池，也可以添加：
-
-- `CANDIDATE_MODE`
-- `TARGET_CANDIDATE_COUNT`
-- `MAX_CANDIDATES_PER_CIDR`
-- `ENABLE_IPV6`
-- `CF_IPV4_RANGE_SOURCES`
-- `CF_IPV6_RANGE_SOURCES`
-- `ADD`
-- `ADDAPI`
-- `ADDCSV`
-- `ADDNOTLS`
-- `ADDNOTLSAPI`
-- `DLS`
-- `CSVREMARK`
-
-### 4. 本地调试
+### 本地调试 / 部署
 
 ```bash
 npm run dev
-```
-
-### 5. 运行测试
-
-```bash
-npm test
-```
-
-### 6. 部署
-
-```bash
 npm run deploy
 ```
 
-## 首次配置流程
-
-1. 部署 Worker
-2. 打开 `/`
-3. 输入 `ADMIN_TOKEN`
-4. 在“基础节点配置”里保存你的原始节点
-5. 点击“开始 Top200 优选”
-6. 把固定订阅链接导入你的客户端
-
-之后的日常更新，只需要：
-
-1. 打开 `/`
-2. 点击“开始 Top200 优选”
-3. 回到客户端点“更新订阅”
-
-## 免费套餐下的说明与限制
-
-这个实现默认面向 Cloudflare 免费套餐：
-
-- 只需要一个 Worker
-- 只需要一个 KV Namespace
-- 不依赖 VPS
-- 不依赖单独后端服务器
-- 优选流程为一次请求内同步执行，适合轻量候选源场景
-
-需要注意：
-
-- 如果你把 `ADDAPI` / `ADDCSV` 指向很多外部源，请控制数量与响应时间
-- 免费套餐下不适合在单次 Worker 请求里完整复刻 `CloudflareSpeedTest` 的数千次 TCP 探测
-- 本项目默认内置 `ip.txt`，会在运行时生成接近 `5955` 的 IPv4 候选池
-- 真正发布到固定订阅里的仍然只有 Top200，不会把几千条全部写入客户端
-
-## 测试覆盖
-
-已包含以下测试：
-
-- 候选生成层
-  - `candidate-pool.test.mjs`
-  - 断言运行时候选池进入几千级，不再是几百
-- 运行时池回归
-  - `regression-runtime-pool.test.mjs`
-  - 防止默认路径退回 `seed_only`
-- 节点解析
-  - `vmess`
-  - `vless`
-  - `trojan`
-  - Base64 展开
-- 固定订阅流程
-  - `fixed-subscription.test.mjs`
-  - `save-base`
-  - `update-preferred`
-  - `status`
-  - `/sub/fixed`
-- 状态接口
-  - `api-status.test.mjs`
-  - 断言 `candidateCount` 和 `candidateMode`
-- 旧模式回归
-  - `/api/generate`
-  - `/sub/:id`
-- Top200 回归
-  - `/api/start` 必须写入 200 条 preferredIps
-  - `GET /api/status` 必须返回 200 条
-  - `GET /sub/fixed` 必须渲染出 200 条
-- 前端集成
-  - 点击开始后会调用 `/api/start`
-  - 成功后会刷新页面状态
-
-## 参考来源
+## 参考项目
 
 - Project 1: https://github.com/cmliu/WorkerVless2sub
 - Project 2: https://github.com/InfiCheesy/cloudflaresub
-- 原作者视频: https://youtu.be/E5PI0LsQ43M?si=HJVtHKTlfaSC-yTr
+- CloudflareSpeedTest: https://github.com/XIU2/CloudflareSpeedTest

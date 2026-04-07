@@ -13,7 +13,7 @@ function adminHeaders(env, contentType = 'application/json') {
   };
 }
 
-test('api/start really writes Top200 instead of Top10', async () => {
+test('deprecated /api/start still works as a compatibility path and writes Top200', async () => {
   const env = createTestEnv({
     CANDIDATE_RANDOM_SEED: 'regression-top200-test',
   });
@@ -37,9 +37,11 @@ test('api/start really writes Top200 instead of Top10', async () => {
   assert.equal(start.status, 200);
   const startJson = await start.json();
   assert.equal(startJson.ok, true);
+  assert.equal(startJson.deprecated, true);
   assert.equal(startJson.preferredCount, 200);
   assert.ok(startJson.candidateCount >= 5000);
   assert.equal(startJson.candidateMode, 'hybrid');
+  assert.match(startJson.message, /主方案已迁移到本地 CLI/);
 
   const status = await callWorker(worker, env, '/api/status', {
     headers: {
@@ -52,6 +54,7 @@ test('api/start really writes Top200 instead of Top10', async () => {
   assert.ok(statusJson.candidateCount >= 5000);
   assert.equal(statusJson.candidateMode, 'hybrid');
   assert.equal(statusJson.latestRunStatus.state, 'success');
+  assert.match(statusJson.latestRunStatus.message, /本地 CLI/);
 
   const fixedRaw = await callWorker(
     worker,
@@ -130,6 +133,7 @@ test('api/start falls back to available candidates when less than 200 exist', as
   assert.equal(start.status, 200);
   const startJson = await start.json();
   assert.equal(startJson.ok, true);
+  assert.equal(startJson.deprecated, true);
   assert.equal(startJson.preferredCount, 2);
   assert.equal(startJson.candidateCount, 2);
   assert.equal(startJson.candidateMode, 'hybrid');

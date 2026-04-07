@@ -6,7 +6,7 @@
     <title>Cloudflare Top200 Fixed Subscription</title>
     <meta
       name="description"
-      content="单 Worker 固定订阅发布器。点击开始后按 Project 1 思路产出 Top200 优选 IP，并直接覆盖更新固定订阅链接。"
+      content="单 Worker 固定订阅发布器。主流程已改为本地 CLI 测速和优选，Worker 只负责固定订阅发布。"
     />
     <link rel="icon" href="/icons/auto.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
@@ -18,12 +18,12 @@
           <p class="eyebrow">Single Worker · Static UI · KV · Fixed Subscription</p>
           <h1 id="uiTitle">Cloudflare Top200 Fixed Subscription</h1>
           <p class="hero-text">
-            保留 `WorkerVless2sub` 的大候选池和优选思路，但所有最终输出统一改为
-            <strong>Top200 / 最优 200 个 IP</strong>。点击一次开始，自动覆盖固定订阅链接。
+            主流程已改为 <strong>本地 CLI 本机测速 + Top200 发布</strong>。在当前设备、当前网络下执行
+            `client/run-update.sh` 或 `client/run-update.ps1`，Worker 只负责保存最新 preferredIps 并渲染固定订阅链接。
           </p>
           <div class="hero-actions">
-            <button id="startBtn" type="button">开始 Top200 优选</button>
-            <span id="startHint" class="inline-hint">成功后回到 Clash / v2ray / Shadowrocket 点击“更新订阅”。</span>
+            <button id="startBtn" type="button" disabled>网页 /api/start 已弃用</button>
+            <span id="startHint" class="inline-hint">请在本地设备执行 `./client/run-update.sh` 或 `powershell -File .\client\run-update.ps1`，成功后回到订阅客户端点击“更新订阅”。</span>
           </div>
         </div>
 
@@ -37,8 +37,8 @@
             <strong>Top200</strong>
           </div>
           <div class="hero-chip">
-            <span>部署方式</span>
-            <strong>Cloudflare Workers</strong>
+            <span>主执行端</span>
+            <strong>Local CLI</strong>
           </div>
         </aside>
       </section>
@@ -74,6 +74,11 @@
                 <span class="stat-label">候选池总数</span>
                 <strong id="candidateCount">0</strong>
                 <small id="candidateMode">运行模式待定</small>
+              </article>
+              <article class="stat-card">
+                <span class="stat-label">测速成功数</span>
+                <strong id="testedCount">0</strong>
+                <small>当前执行设备的有效测速结果</small>
               </article>
               <article class="stat-card">
                 <span class="stat-label">最近更新时间</span>
@@ -127,6 +132,46 @@
             <p id="subTokenHint" class="note">
               如果配置了 `SUB_ACCESS_TOKEN`，上面展示的是带 token 的完整固定订阅链接。
             </p>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Local CLI First</p>
+                <h2>本地 CLI 主流程</h2>
+              </div>
+            </div>
+
+            <div class="url-stack">
+              <label class="url-row">
+                <span>Unix 初始化</span>
+                <div class="url-actions">
+                  <input id="unixBootstrapCmd" readonly value="cd client && ./bootstrap.sh" />
+                  <button data-copy="unixBootstrapCmd" type="button" class="ghost-button small">复制</button>
+                </div>
+              </label>
+              <label class="url-row">
+                <span>Unix 更新</span>
+                <div class="url-actions">
+                  <input id="unixRunCmd" readonly value="cd client && ./run-update.sh" />
+                  <button data-copy="unixRunCmd" type="button" class="ghost-button small">复制</button>
+                </div>
+              </label>
+              <label class="url-row">
+                <span>Windows 更新</span>
+                <div class="url-actions">
+                  <input id="windowsRunCmd" readonly value="powershell -ExecutionPolicy Bypass -File .\client\run-update.ps1" />
+                  <button data-copy="windowsRunCmd" type="button" class="ghost-button small">复制</button>
+                </div>
+              </label>
+            </div>
+
+            <ol class="flat-list">
+              <li>首次只需要执行一次 `client/bootstrap.sh` 或 `client/bootstrap.ps1`。</li>
+              <li>填好 `client/config.env` 后，在当前设备当前网络下执行 `client/run-update.sh` 或 `client/run-update.ps1`。</li>
+              <li>脚本会在本机测速并把最新 Top200 推送到 Worker 固定订阅。</li>
+              <li>回到 Clash / v2ray / Shadowrocket / Surge 点击“更新订阅”。</li>
+            </ol>
           </section>
 
           <section class="panel">
@@ -200,8 +245,8 @@
               </div>
             </form>
             <p class="note">
-              页面源码里不会硬编码 secret。保存后，`/api/save-base`、`/api/start`、`/api/update-preferred`
-              都会带上 `Authorization: Bearer ...`。
+              页面源码里不会硬编码 secret。页面仅用于保存基础节点和查看状态。主优选流程请使用本地 CLI，
+              它会通过 `Authorization: Bearer ...` 调用 `/api/update-preferred`。
             </p>
           </section>
 
@@ -214,8 +259,8 @@
             </div>
             <ol class="flat-list">
               <li>首次保存一次基础节点。</li>
-              <li>之后手机打开网页，点击“开始 Top200 优选”。</li>
-              <li>等待显示“已更新成功”。</li>
+              <li>在本地设备执行 `cd client && ./run-update.sh` 或 `powershell -File .\client\run-update.ps1`。</li>
+              <li>等待脚本输出“更新成功”。</li>
               <li>回到客户端点击“更新订阅”。</li>
             </ol>
           </section>

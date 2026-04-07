@@ -13,10 +13,8 @@ function adminHeaders(env) {
   };
 }
 
-test('api/status exposes candidateCount and candidateMode after runtime optimization', async () => {
-  const env = createTestEnv({
-    CANDIDATE_RANDOM_SEED: 'api-status-test',
-  });
+test('api/status exposes local-cli workflow fields after update-preferred', async () => {
+  const env = createTestEnv();
 
   await callWorker(worker, env, '/api/save-base', {
     method: 'POST',
@@ -28,11 +26,17 @@ test('api/status exposes candidateCount and candidateMode after runtime optimiza
     }),
   });
 
-  await callWorker(worker, env, '/api/start', {
+  await callWorker(worker, env, '/api/update-preferred', {
     method: 'POST',
-    headers: {
-      authorization: `Bearer ${env.ADMIN_TOKEN}`,
-    },
+    headers: adminHeaders(env),
+    body: JSON.stringify({
+      preferredIps: Array.from({ length: 200 }, (_, index) => `198.51.100.${(index % 200) + 1}:443#CF-${index + 1}`),
+      source: 'local-cli-optimize',
+      candidateMode: 'local-cli',
+      candidateCount: 5955,
+      testedCount: 218,
+      lastOptimizedAt: 1712345678901,
+    }),
   });
 
   const status = await callWorker(worker, env, '/api/status', {
@@ -43,8 +47,11 @@ test('api/status exposes candidateCount and candidateMode after runtime optimiza
   assert.equal(status.status, 200);
   const statusJson = await status.json();
   assert.equal(statusJson.ok, true);
-  assert.ok(statusJson.candidateCount >= 5000);
-  assert.equal(statusJson.candidateMode, 'hybrid');
-  assert.equal(statusJson.latestRunStatus.candidateMode, 'hybrid');
+  assert.equal(statusJson.workflowMode, 'local-cli-first');
+  assert.equal(statusJson.startEndpointDeprecated, true);
+  assert.equal(statusJson.candidateCount, 5955);
+  assert.equal(statusJson.testedCount, 218);
+  assert.equal(statusJson.candidateMode, 'local-cli');
+  assert.equal(statusJson.latestRunStatus.candidateMode, 'local-cli');
   assert.equal(statusJson.preferredCount, 200);
 });

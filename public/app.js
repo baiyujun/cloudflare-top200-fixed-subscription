@@ -25,6 +25,7 @@ export function bootstrapApp(options = {}) {
     inputNodeCount: doc.getElementById('inputNodeCount'),
     candidateCount: doc.getElementById('candidateCount'),
     candidateMode: doc.getElementById('candidateMode'),
+    testedCount: doc.getElementById('testedCount'),
     projectedOutput: doc.getElementById('projectedOutput'),
     lastOptimizedAt: doc.getElementById('lastOptimizedAt'),
     tlsMode: doc.getElementById('tlsMode'),
@@ -56,7 +57,6 @@ export function bootstrapApp(options = {}) {
   }
 
   elements.refreshBtn?.addEventListener('click', () => loadStatus({ silent: true }));
-  elements.startBtn?.addEventListener('click', handleStart);
   elements.clearTokenBtn?.addEventListener('click', handleClearToken);
   elements.tokenForm?.addEventListener('submit', handleSaveToken);
   elements.baseForm?.addEventListener('submit', handleSaveBase);
@@ -66,7 +66,6 @@ export function bootstrapApp(options = {}) {
 
   return {
     loadStatus,
-    handleStart,
     handleSaveBase,
     handleSaveToken,
     getState: () => ({ ...state }),
@@ -137,35 +136,6 @@ export function bootstrapApp(options = {}) {
     }
   }
 
-  async function handleStart() {
-    if (!state.token) {
-      flash('请先填写并保存 ADMIN_TOKEN。', 'error');
-      return;
-    }
-
-    setBusy(elements.startBtn, true, '执行中...');
-    elements.runState.textContent = 'running';
-    elements.runMessage.textContent = '正在执行 Top200 优选并写入固定订阅。';
-
-    try {
-      const response = await fetcher('/api/start', {
-        method: 'POST',
-        headers: buildAuthHeaders(state.token),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || 'Top200 优选失败');
-      }
-      renderStatus(data.status);
-      flash(`已更新成功，当前写入数量：${data.preferredCount}。请回到订阅软件点击“更新订阅”。`, 'success');
-    } catch (error) {
-      flash(error.message || 'Top200 优选失败', 'error');
-      loadStatus({ silent: true }).catch(() => {});
-    } finally {
-      setBusy(elements.startBtn, false, '开始 Top200 优选');
-    }
-  }
-
   function handleSaveToken(event) {
     event.preventDefault();
     const nextToken = elements.adminToken.value.trim();
@@ -214,6 +184,7 @@ export function bootstrapApp(options = {}) {
     elements.preferredCount.textContent = String(data.preferredCount || 0);
     elements.inputNodeCount.textContent = String(data.inputNodeCount || 0);
     elements.candidateCount.textContent = String(data.candidateCount || 0);
+    elements.testedCount.textContent = String(data.testedCount || data.latestRunStatus?.testedCount || 0);
     elements.candidateMode.textContent = `运行模式：${data.candidateMode || data.latestRunStatus?.candidateMode || 'hybrid'}`;
     elements.projectedOutput.textContent = `预计输出节点 ${data.projectedOutputNodeCount || 0}`;
     elements.lastOptimizedAt.textContent = formatTime(data.lastOptimizedAt);
@@ -248,8 +219,8 @@ export function bootstrapApp(options = {}) {
       .map((line) => `<li>${escapeHtml(line)}</li>`)
       .join('');
     elements.previewMeta.textContent = preferredIps.length
-      ? `当前固定订阅已保存 ${preferredIps.length} 条 Top200 preferredIps，本次候选池总数 ${data.candidateCount || 0}。`
-      : '暂无 Top200 结果。保存基础节点后点击“开始 Top200 优选”。';
+      ? `当前固定订阅已保存 ${preferredIps.length} 条 Top200 preferredIps，本次候选池总数 ${data.candidateCount || 0}，测速成功数 ${data.testedCount || 0}。`
+      : '暂无 Top200 结果。请在本地设备执行 ./client/run-update.sh 或 client/run-update.ps1。';
   }
 
   function flash(message, type = 'info') {

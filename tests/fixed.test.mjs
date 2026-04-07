@@ -29,6 +29,7 @@ test('fixed subscription save-base -> update-preferred -> status -> sub/fixed', 
   const saveJson = await saveBase.json();
   assert.equal(saveJson.ok, true);
   assert.equal(saveJson.inputNodeCount, 1);
+  const fixedRawUrlBefore = saveJson.fixedUrls.raw;
 
   const preferredIps = Array.from({ length: 200 }, (_, index) => `cf-${index + 1}.example.com:443#CF-${index + 1}`);
   const updatePreferred = await callWorker(worker, env, '/api/update-preferred', {
@@ -36,13 +37,17 @@ test('fixed subscription save-base -> update-preferred -> status -> sub/fixed', 
     headers: adminHeaders(env),
     body: JSON.stringify({
       preferredIps,
-      source: 'manual-test',
+      source: 'local-cli-optimize',
+      candidateMode: 'local-cli',
+      candidateCount: 5955,
+      testedCount: 203,
       lastOptimizedAt: 1712345678901,
     }),
   });
   assert.equal(updatePreferred.status, 200);
   const updateJson = await updatePreferred.json();
   assert.equal(updateJson.preferredCount, 200);
+  assert.equal(updateJson.fixedUrls.raw, fixedRawUrlBefore);
   assert.match(updateJson.fixedUrls.raw, /\/sub\/fixed\?target=raw&token=/);
 
   const publicStatus = await callWorker(worker, env, '/api/status');
@@ -50,6 +55,9 @@ test('fixed subscription save-base -> update-preferred -> status -> sub/fixed', 
   assert.equal(publicStatusJson.ok, true);
   assert.equal(publicStatusJson.preferredCount, 200);
   assert.equal(publicStatusJson.hasNodeLinks, true);
+  assert.equal(publicStatusJson.candidateCount, 5955);
+  assert.equal(publicStatusJson.testedCount, 203);
+  assert.equal(publicStatusJson.candidateMode, 'local-cli');
 
   const fixedDenied = await callWorker(worker, env, '/sub/fixed?target=raw');
   assert.equal(fixedDenied.status, 403);
