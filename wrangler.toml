@@ -8,6 +8,10 @@ binding = "SUB_STORE"
 id = "71a6252b0e69499a9d5561e41738b772"
 preview_id = "abde0d917d304026b26f819faaa44318"
 
+[[routes]]
+pattern = "sub.050721.xyz"
+custom_domain = true
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
