@@ -24,12 +24,6 @@ export async function optimizePreferredIps({ env, requestUrl, baseNodes = [] }) 
   });
 
   const merged = dedupeCandidates([...csvCandidates, ...apiCandidates, ...staticCandidates]);
-  if (merged.length < TOP200_LIMIT) {
-    throw new Error(
-      `优选候选不足 ${TOP200_LIMIT} 条，当前仅 ${merged.length} 条。请补充 ADD / ADDAPI / ADDCSV 来源。`,
-    );
-  }
-
   const top200 = merged.slice(0, TOP200_LIMIT);
 
   return {
@@ -57,7 +51,9 @@ function getOptimizerConfig(env, tlsMode) {
   const defaultApiSources = isTls
     ? ['/seed/addressesapi.txt', '/seed/addressesipv6api.txt']
     : [];
-  const defaultCsvSources = ['/seed/addressescsv.csv'];
+  const defaultCsvSources = isTls
+    ? ['/seed/addressescsv.csv', '/seed/CloudflareSpeedTest.csv']
+    : ['/seed/addressescsv.csv'];
 
   return {
     inlineText,
@@ -176,7 +172,7 @@ function parseCsvCandidates(text, options) {
   const [header, ...dataRows] = rows;
   const tlsIndex = findCsvIndex(header, ['TLS']);
   if (tlsIndex < 0) {
-    return [];
+    return parseSpeedTestCsvCandidates(dataRows, options);
   }
 
   const ipIndex = findCsvIndex(header, ['IP地址', 'IP', 'Address']);
@@ -210,6 +206,36 @@ function parseCsvCandidates(text, options) {
       source: 'csv',
       speed,
       latency: parseFloat(row[latencyIndex] || ''),
+      insertionOrder: index,
+    });
+  });
+
+  candidates.sort(compareCandidates);
+  return candidates;
+}
+
+function parseSpeedTestCsvCandidates(dataRows, options) {
+  if (options.tlsMode !== 'tls') {
+    return [];
+  }
+
+  const candidates = [];
+
+  dataRows.forEach((row, index) => {
+    const host = String(row[0] || '').trim();
+    const speed = parseFloat(row[5] || '');
+    const latency = parseFloat(row[4] || '');
+    if (!host || !Number.isFinite(speed) || speed <= options.speedFloor) {
+      return;
+    }
+
+    candidates.push({
+      host,
+      port: 443,
+      label: 'CFST',
+      source: 'csv-speedtest',
+      speed,
+      latency,
       insertionOrder: index,
     });
   });

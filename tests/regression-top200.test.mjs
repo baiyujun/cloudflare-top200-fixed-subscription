@@ -82,3 +82,50 @@ test('legacy /api/generate and /sub/:id still work', async () => {
   const decoded = Buffer.from(await legacySub.text(), 'base64').toString('utf8');
   assert.equal(decoded.split('\n').filter(Boolean).length, 2);
 });
+
+test('api/start falls back to available candidates when less than 200 exist', async () => {
+  const tinyAssets = {
+    async fetch(request) {
+      const url = new URL(request.url);
+      if (url.pathname === '/seed/tiny.csv') {
+        return new Response(
+          ['IP地址,端口,回源端口,TLS,数据中心,地区,城市,TCP延迟(ms),速度(MB/s)', '1.1.1.1,443,443,true,HKG,Asia,Hong Kong,30,10.5', '1.1.1.2,443,443,true,HKG,Asia,Hong Kong,35,9.8'].join('\n'),
+          { status: 200 },
+        );
+      }
+      if (url.pathname === '/seed/empty.txt') {
+        return new Response('', { status: 200 });
+      }
+      return new Response('not found', { status: 404 });
+    },
+  };
+
+  const env = createTestEnv({
+    ADDCSV: '/seed/tiny.csv',
+    ADDAPI: '/seed/empty.txt',
+    ASSETS: tinyAssets,
+  });
+
+  await callWorker(worker, env, '/api/save-base', {
+    method: 'POST',
+    headers: adminHeaders(env),
+    body: JSON.stringify({
+      namePrefix: 'Tiny',
+      nodeLinks: vmess,
+      keepOriginalHost: true,
+    }),
+  });
+
+  const start = await callWorker(worker, env, '/api/start', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${env.ADMIN_TOKEN}`,
+    },
+  });
+  assert.equal(start.status, 200);
+  const startJson = await start.json();
+  assert.equal(startJson.ok, true);
+  assert.equal(startJson.preferredCount, 2);
+  assert.equal(startJson.candidateCount, 2);
+  assert.match(startJson.message, /仅找到 2 条/);
+});

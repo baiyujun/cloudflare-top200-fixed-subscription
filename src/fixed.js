@@ -188,7 +188,10 @@ export async function handleStart(request, env, url) {
 
     return json({
       ok: true,
-      message: '已更新成功，请回到订阅软件点击“更新订阅”。',
+      message:
+        optimized.preferredIps.length >= TOP200_LIMIT
+          ? '已更新成功，请回到订阅软件点击“更新订阅”。'
+          : `已更新成功，但当前仅找到 ${optimized.preferredIps.length} 条可用优选结果。`,
       preferredCount: optimized.preferredIps.length,
       candidateCount: optimized.totalCandidates,
       inputNodeCount: parsedNodes.nodes.length,
