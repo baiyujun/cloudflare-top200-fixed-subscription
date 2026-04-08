@@ -113,7 +113,6 @@ cloudflare-top200-fixed-subscription/
 cd client
 cp config.example.env config.env
 ./bootstrap.sh
-./run-update.sh
 ```
 
 ### Windows
@@ -122,16 +121,32 @@ cp config.example.env config.env
 cd client
 Copy-Item config.example.env config.env
 powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
-powershell -ExecutionPolicy Bypass -File .\run-update.ps1
 ```
 
 ### 日常使用
 
 1. 首次通过网页或 API 保存基础节点
-2. 在当前设备执行 `client/run-update.sh` 或 `client/run-update.ps1`
+2. 首次 bootstrap 后，在任意目录执行 `subup`
 3. 脚本本机测速并生成最新 Top200
 4. 脚本自动调用 `/api/update-preferred`
 5. 回到订阅客户端点击“更新订阅”
+
+日常需要记住的命令只有一个：
+
+```bash
+subup
+```
+
+各平台日常命令统一为：
+
+- Unix / Linux / macOS / Termux：`subup`
+- Windows：`subup`
+
+Windows 实际是由 `subup.cmd` / `subup.ps1` 提供入口，但用户日常输入仍然只需要 `subup`。
+
+默认推荐导入的固定订阅地址是：
+
+- `https://sub.050721.xyz/sub/fixed?target=clash`
 
 ## 本地 CLI 如何工作
 
@@ -226,7 +241,8 @@ Worker 会：
 - 查看固定订阅链接
 - 查看 `preferredCount / candidateCount / testedCount / lastOptimizedAt`
 - 保存基础节点
-- 提示使用 `client/run-update.*`
+- 提示使用 `subup`
+- 明确推荐默认订阅地址 `https://sub.050721.xyz/sub/fixed?target=clash`
 
 页面不会再把“点击开始优选”作为主流程。
 
@@ -332,7 +348,7 @@ npm test
   - 配置解析默认值
   - TopN 默认 200
   - payload 生成
-  - `run-update.sh` 更新请求构造
+  - `subup` 底层 `run-update.sh` 更新请求构造
   - 错误处理
 
 ## 部署

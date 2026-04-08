@@ -1,6 +1,8 @@
 # Local CLI Client
 
-本目录是仓库当前的主方案：在**当前执行设备、当前网络**下运行本地测速与优选，然后只把最终 Top200 推送到 Worker 固定订阅。
+本目录的日常入口已经统一成一个短命令：
+
+- `subup`
 
 支持环境：
 
@@ -9,57 +11,87 @@
 - macOS
 - Windows
 
-入口文件：
+## 首次初始化
 
-- `run-update.sh`
-  - 适用于 Termux / Linux / macOS
-- `run-update.ps1`
-  - 适用于 Windows PowerShell
-- `bootstrap.sh`
-  - Unix 系初始化脚本
-- `bootstrap.ps1`
-  - Windows 初始化脚本
-
-## Unix / Termux / macOS
+### Unix / Linux / macOS / Termux
 
 ```bash
 cd client
 cp config.example.env config.env
 ./bootstrap.sh
-./run-update.sh
 ```
 
-## Windows
+### Windows
 
 ```powershell
 cd client
 Copy-Item config.example.env config.env
 powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
-powershell -ExecutionPolicy Bypass -File .\run-update.ps1
 ```
 
-## 配置说明
+`bootstrap` 会自动安装全局短命令：
+
+- Unix：`subup`
+- Windows：`subup.cmd` / `subup.ps1`
+
+Windows 虽然安装的是包装入口文件，但日常输入的命令仍然统一为：
+
+- `subup`
+
+安装完成后，用户在任意目录都可以直接输入：
+
+```bash
+subup
+```
+
+## 日常使用
+
+不再需要：
+
+- `cd client`
+- 再执行长脚本名
+
+只需要：
+
+```bash
+subup
+```
+
+这个命令会自动：
+
+1. 读取配置文件
+2. 在当前设备当前网络下执行测速
+3. 生成 Top200
+4. 调用 Worker 的 `/api/update-preferred`
+5. 打印固定订阅地址
+
+## 输出
+
+执行成功后会打印：
+
+- 更新成功 / 失败
+- `candidateCount`
+- `testedCount`
+- `preferredCount`
+- 固定订阅四个地址
+- 默认推荐订阅地址（Clash）
+
+默认推荐订阅地址优先使用：
+
+- `https://sub.050721.xyz/sub/fixed?target=clash`
+
+## 配置
 
 至少需要填写：
 
 - `WORKER_BASE_URL`
 - `ADMIN_TOKEN`
 
-默认行为：
+默认：
 
 - `TOP_N=200`
 - `CANDIDATE_SOURCE_MODE=cfst_ipv4_ranges`
-- 自动下载当前平台对应的 `CloudflareSpeedTest` 可执行文件
-- 使用当前设备网络执行本机测速
-- 完成后调用 Worker 的 `/api/update-preferred`
 
-## 结果
+配置模板见：
 
-脚本执行成功后会输出：
-
-- 候选池总数
-- 测速成功数
-- 最终写入的 Top200 数量
-- 固定订阅地址
-
-然后只需要回到订阅客户端点击“更新订阅”。
+- [config.example.env](/home/hjy/cloudflaresub-publish/client/config.example.env)

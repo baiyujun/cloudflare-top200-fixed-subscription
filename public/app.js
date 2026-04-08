@@ -220,7 +220,7 @@ export function bootstrapApp(options = {}) {
       .join('');
     elements.previewMeta.textContent = preferredIps.length
       ? `当前固定订阅已保存 ${preferredIps.length} 条 Top200 preferredIps，本次候选池总数 ${data.candidateCount || 0}，测速成功数 ${data.testedCount || 0}。`
-      : '暂无 Top200 结果。请在本地设备执行 ./client/run-update.sh 或 client/run-update.ps1。';
+      : '暂无 Top200 结果。请先运行 bootstrap 安装命令，然后在本地设备执行 subup。';
   }
 
   function flash(message, type = 'info') {

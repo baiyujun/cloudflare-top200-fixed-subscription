@@ -162,7 +162,7 @@ export async function handleStart(request, env, url) {
     latestRunStatus: {
       ...current.latestRunStatus,
       state: 'running',
-      message: '兼容模式 /api/start 正在执行。主流程已迁移到本地 CLI，请优先使用 client/run-update.sh 或 client/run-update.ps1。',
+      message: '兼容模式 /api/start 正在执行。主流程已迁移到本地 CLI，请优先使用 subup。',
       startedAt: new Date().toISOString(),
       finishedAt: null,
       preferredCount: current.preferredCount,
@@ -192,7 +192,7 @@ export async function handleStart(request, env, url) {
       updatedFrom: 'deprecated-web-start',
       latestRunStatus: {
         state: 'success',
-        message: '兼容模式 /api/start 已完成更新。主方案已迁移到本地 CLI，请优先使用 client/run-update.sh 或 client/run-update.ps1。',
+        message: '兼容模式 /api/start 已完成更新。主方案已迁移到本地 CLI，请优先使用 subup。',
         startedAt: current.latestRunStatus.startedAt,
         finishedAt: new Date(lastOptimizedAt).toISOString(),
         preferredCount: optimized.preferredIps.length,
@@ -208,7 +208,7 @@ export async function handleStart(request, env, url) {
       deprecated: true,
       message:
         optimized.preferredIps.length >= TOP200_LIMIT
-          ? '兼容模式 /api/start 已更新成功。主方案已迁移到本地 CLI，请改用 client/run-update.sh 或 client/run-update.ps1。'
+          ? '兼容模式 /api/start 已更新成功。主方案已迁移到本地 CLI，请改用 subup。'
           : `兼容模式 /api/start 已更新成功，但当前仅找到 ${optimized.preferredIps.length} 条可用优选结果。主方案已迁移到本地 CLI。`,
       preferredCount: optimized.preferredIps.length,
       candidateCount: optimized.totalCandidates,
@@ -301,7 +301,11 @@ function buildFixedStatus(record, origin, accessToken, includeSensitive, uiTitle
   const status = {
     uiTitle,
     workflowMode: 'local-cli-first',
-    recommendedCommand: './client/run-update.sh',
+    recommendedCommand: 'subup',
+    recommendedCommands: {
+      unix: 'subup',
+      windows: 'subup',
+    },
     startEndpointDeprecated: true,
     hasNodeLinks: Boolean(record.nodeLinks),
     preferredCount: record.preferredCount || 0,

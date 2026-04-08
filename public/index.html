@@ -19,11 +19,11 @@
           <h1 id="uiTitle">Cloudflare Top200 Fixed Subscription</h1>
           <p class="hero-text">
             主流程已改为 <strong>本地 CLI 本机测速 + Top200 发布</strong>。在当前设备、当前网络下执行
-            `client/run-update.sh` 或 `client/run-update.ps1`，Worker 只负责保存最新 preferredIps 并渲染固定订阅链接。
+            `subup`，Worker 只负责保存最新 preferredIps 并渲染固定订阅链接。
           </p>
           <div class="hero-actions">
             <button id="startBtn" type="button" disabled>网页 /api/start 已弃用</button>
-            <span id="startHint" class="inline-hint">请在本地设备执行 `./client/run-update.sh` 或 `powershell -File .\client\run-update.ps1`，成功后回到订阅客户端点击“更新订阅”。</span>
+            <span id="startHint" class="inline-hint">请先运行 bootstrap 安装全局命令，然后在任意目录执行 `subup`，成功后回到订阅客户端点击“更新订阅”。</span>
           </div>
         </div>
 
@@ -151,16 +151,16 @@
                 </div>
               </label>
               <label class="url-row">
-                <span>Unix 更新</span>
+                <span>Unix / Termux / macOS 日常命令</span>
                 <div class="url-actions">
-                  <input id="unixRunCmd" readonly value="cd client && ./run-update.sh" />
+                  <input id="unixRunCmd" readonly value="subup" />
                   <button data-copy="unixRunCmd" type="button" class="ghost-button small">复制</button>
                 </div>
               </label>
               <label class="url-row">
-                <span>Windows 更新</span>
+                <span>Windows 日常命令</span>
                 <div class="url-actions">
-                  <input id="windowsRunCmd" readonly value="powershell -ExecutionPolicy Bypass -File .\client\run-update.ps1" />
+                  <input id="windowsRunCmd" readonly value="subup" />
                   <button data-copy="windowsRunCmd" type="button" class="ghost-button small">复制</button>
                 </div>
               </label>
@@ -168,7 +168,7 @@
 
             <ol class="flat-list">
               <li>首次只需要执行一次 `client/bootstrap.sh` 或 `client/bootstrap.ps1`。</li>
-              <li>填好 `client/config.env` 后，在当前设备当前网络下执行 `client/run-update.sh` 或 `client/run-update.ps1`。</li>
+              <li>填好 `client/config.env` 后，在当前设备当前网络下直接执行 `subup`。</li>
               <li>脚本会在本机测速并把最新 Top200 推送到 Worker 固定订阅。</li>
               <li>回到 Clash / v2ray / Shadowrocket / Surge 点击“更新订阅”。</li>
             </ol>
@@ -259,7 +259,7 @@
             </div>
             <ol class="flat-list">
               <li>首次保存一次基础节点。</li>
-              <li>在本地设备执行 `cd client && ./run-update.sh` 或 `powershell -File .\client\run-update.ps1`。</li>
+              <li>在本地设备执行 `subup`。</li>
               <li>等待脚本输出“更新成功”。</li>
               <li>回到客户端点击“更新订阅”。</li>
             </ol>

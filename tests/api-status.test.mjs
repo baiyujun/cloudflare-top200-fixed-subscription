@@ -48,6 +48,9 @@ test('api/status exposes local-cli workflow fields after update-preferred', asyn
   const statusJson = await status.json();
   assert.equal(statusJson.ok, true);
   assert.equal(statusJson.workflowMode, 'local-cli-first');
+  assert.equal(statusJson.recommendedCommand, 'subup');
+  assert.equal(statusJson.recommendedCommands.unix, 'subup');
+  assert.equal(statusJson.recommendedCommands.windows, 'subup');
   assert.equal(statusJson.startEndpointDeprecated, true);
   assert.equal(statusJson.candidateCount, 5955);
   assert.equal(statusJson.testedCount, 218);

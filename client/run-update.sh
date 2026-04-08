@@ -58,6 +58,10 @@ client_post_update_payload "${PAYLOAD_FILE}" "${RESPONSE_FILE}"
 
 FIXED_AUTO_URL="$(jq -r '.fixedUrls.auto // .status.fixedUrls.auto // ""' "${RESPONSE_FILE}")"
 FIXED_TARGET_URL="$(jq -r --arg output "${OUTPUT_FORMAT}" '.fixedUrls[$output] // .status.fixedUrls[$output] // .fixedUrls.auto // .status.fixedUrls.auto // ""' "${RESPONSE_FILE}")"
+PUBLIC_FIXED_AUTO_URL="$(client_default_fixed_base_url)"
+PUBLIC_FIXED_RAW_URL="$(client_default_fixed_raw_url)"
+PUBLIC_FIXED_CLASH_URL="$(client_default_fixed_clash_url)"
+PUBLIC_FIXED_SURGE_URL="$(client_default_fixed_surge_url)"
 
 client_log "测速成功数：${TESTED_COUNT}"
 client_log "最终写入数量：${PREFERRED_COUNT}"
@@ -68,5 +72,13 @@ printf '更新成功\n'
 printf '候选池总数：%s\n' "${CANDIDATE_COUNT}"
 printf '测速成功数：%s\n' "${TESTED_COUNT}"
 printf '最终 Top%s 数量：%s\n' "${TOP_N}" "${PREFERRED_COUNT}"
-printf '固定订阅：%s\n' "${FIXED_TARGET_URL:-${FIXED_AUTO_URL}}"
+printf '固定订阅地址：\n'
+printf '  自动：%s\n' "${PUBLIC_FIXED_AUTO_URL}"
+printf '  Raw：%s\n' "${PUBLIC_FIXED_RAW_URL}"
+printf '  Clash：%s\n' "${PUBLIC_FIXED_CLASH_URL}"
+printf '  Surge：%s\n' "${PUBLIC_FIXED_SURGE_URL}"
+printf '默认推荐订阅地址（Clash）：%s\n' "${PUBLIC_FIXED_CLASH_URL}"
+if [[ -n "${FIXED_TARGET_URL}" && "${FIXED_TARGET_URL}" != "${PUBLIC_FIXED_CLASH_URL}" ]]; then
+  printf '鉴权直链 / 当前输出格式地址：%s\n' "${FIXED_TARGET_URL}"
+fi
 printf '下一步：回到订阅客户端点击“更新订阅”。\n'

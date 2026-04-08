@@ -5,6 +5,7 @@ set -euo pipefail
 CLIENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${CLIENT_DIR}/.." && pwd)"
 CLIENT_BIN_DIR="${CLIENT_DIR}/bin"
+CLIENT_UNIX_COMMAND_NAME="${CLIENT_UNIX_COMMAND_NAME:-subup}"
 
 client_log() {
   printf '[client] %s\n' "$*"
@@ -37,6 +38,22 @@ client_trim() {
 
 client_default_config_path() {
   printf '%s/config.env' "${CLIENT_DIR}"
+}
+
+client_default_fixed_base_url() {
+  printf '%s/sub/fixed' "${WORKER_BASE_URL%/}"
+}
+
+client_default_fixed_raw_url() {
+  printf '%s?target=raw' "$(client_default_fixed_base_url)"
+}
+
+client_default_fixed_clash_url() {
+  printf '%s?target=clash' "$(client_default_fixed_base_url)"
+}
+
+client_default_fixed_surge_url() {
+  printf '%s?target=surge' "$(client_default_fixed_base_url)"
 }
 
 client_detect_platform() {
@@ -111,6 +128,77 @@ client_load_config() {
   export LATENCY_THREADS LATENCY_PING_COUNT DOWNLOAD_TEST_COUNT DOWNLOAD_TEST_SECONDS TEST_PORT
   export TEST_URL USE_HTTPING HTTPING_STATUS_CODE LATENCY_UPPER_MS LATENCY_LOWER_MS LOSS_RATE_UPPER
   export MIN_SPEED_MBPS CF_COLO_FILTER UPDATE_SOURCE CLIENT_WORKDIR CFST_EXTRA_ARGS REPO_ROOT CLIENT_BIN_DIR
+}
+
+client_path_contains() {
+  local target="$1"
+  local normalized="${target%/}"
+  local item
+  IFS=':' read -r -a path_items <<< "${PATH:-}"
+  for item in "${path_items[@]}"; do
+    if [[ "${item%/}" == "${normalized}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+client_choose_unix_install_dir() {
+  if [[ -n "${SUBUP_INSTALL_DIR:-}" ]]; then
+    printf '%s\n' "${SUBUP_INSTALL_DIR}"
+    return 0
+  fi
+
+  if [[ -n "${PREFIX:-}" && -d "${PREFIX}/bin" && -w "${PREFIX}/bin" ]]; then
+    printf '%s/bin\n' "${PREFIX}"
+    return 0
+  fi
+
+  if [[ -d "/opt/homebrew/bin" && -w "/opt/homebrew/bin" ]]; then
+    printf '/opt/homebrew/bin\n'
+    return 0
+  fi
+
+  if [[ -d "/usr/local/bin" && -w "/usr/local/bin" ]]; then
+    printf '/usr/local/bin\n'
+    return 0
+  fi
+
+  printf '%s/.local/bin\n' "${HOME}"
+}
+
+client_ensure_unix_path() {
+  local install_dir="$1"
+  if client_path_contains "${install_dir}"; then
+    return 0
+  fi
+
+  local export_line="export PATH=\"${install_dir}:\$PATH\""
+  local rc_file
+  for rc_file in "${HOME}/.profile" "${HOME}/.bashrc" "${HOME}/.zshrc"; do
+    if [[ ! -f "${rc_file}" ]]; then
+      if [[ "${rc_file}" != "${HOME}/.profile" ]]; then
+        continue
+      fi
+      mkdir -p "$(dirname "${rc_file}")"
+      : > "${rc_file}"
+    fi
+    if ! grep -Fq "${export_line}" "${rc_file}"; then
+      printf '\n# added by subup bootstrap\n%s\n' "${export_line}" >> "${rc_file}"
+    fi
+  done
+}
+
+client_install_unix_subup_command() {
+  local install_dir="${1:-$(client_choose_unix_install_dir)}"
+  local config_path="${2:-$(client_default_config_path)}"
+  local command_path="${install_dir}/${CLIENT_UNIX_COMMAND_NAME}"
+
+  mkdir -p "${install_dir}"
+  printf '#!/usr/bin/env bash\nexec %q %q "$@"\n' "${CLIENT_DIR}/run-update.sh" "${config_path}" > "${command_path}"
+  chmod +x "${command_path}"
+  client_ensure_unix_path "${install_dir}"
+  printf '%s\n' "${command_path}"
 }
 
 client_install_cfst() {

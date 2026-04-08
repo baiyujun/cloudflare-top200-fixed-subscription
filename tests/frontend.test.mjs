@@ -85,8 +85,8 @@ test('frontend renders local CLI first status page without triggering /api/start
   assert.equal(dom.window.document.getElementById('candidateCount').textContent, '5955');
   assert.match(dom.window.document.getElementById('candidateMode').textContent, /local-cli/);
   assert.equal(dom.window.document.getElementById('startBtn').disabled, true);
-  assert.match(dom.window.document.getElementById('unixRunCmd').value, /client/);
-  assert.match(dom.window.document.getElementById('windowsRunCmd').value, /run-update\.ps1/);
+  assert.equal(dom.window.document.getElementById('unixRunCmd').value, 'subup');
+  assert.equal(dom.window.document.getElementById('windowsRunCmd').value, 'subup');
   assert.match(dom.window.document.getElementById('fixedRawUrl').value, /target=raw/);
   assert.equal(calls.filter((entry) => entry.key === 'POST /api/start').length, 0);
 });

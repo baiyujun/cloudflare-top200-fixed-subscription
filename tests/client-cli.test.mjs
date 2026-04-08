@@ -182,7 +182,15 @@ test('client run-update.sh posts Top200 results to Worker update endpoint', asyn
     });
 
     assert.match(stdout, /更新成功/);
-    assert.match(stdout, /固定订阅：https:\/\/example\.test\/sub\/fixed\?target=clash&token=sub-token/);
+    assert.match(stdout, /候选池总数：2/);
+    assert.match(stdout, /测速成功数：205/);
+    assert.match(stdout, /最终 Top200 数量：200/);
+    assert.match(stdout, /自动：http:\/\/127\.0\.0\.1:/);
+    assert.match(stdout, /target=raw/);
+    assert.match(stdout, /target=clash/);
+    assert.match(stdout, /target=surge/);
+    assert.match(stdout, /默认推荐订阅地址（Clash）：http:\/\/127\.0\.0\.1:/);
+    assert.match(stdout, /鉴权直链 \/ 当前输出格式地址：https:\/\/example\.test\/sub\/fixed\?target=clash&token=sub-token/);
     assert.equal(requests.length, 1);
     assert.equal(requests[0].method, 'POST');
     assert.equal(requests[0].url, '/api/update-preferred');
@@ -193,6 +201,58 @@ test('client run-update.sh posts Top200 results to Worker update endpoint', asyn
   } finally {
     if (server) {
       await new Promise((resolve) => server.close(resolve));
+    }
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('bootstrap.sh installs global subup wrapper into target directory', async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'client-bootstrap-'));
+
+  try {
+    const homeDir = path.join(tmpDir, 'home');
+    const installDir = path.join(tmpDir, 'bin');
+    const configPath = path.join(clientRoot, 'config.env');
+    const backupPath = path.join(tmpDir, 'config.backup');
+
+    let hadConfig = false;
+    try {
+      await readFile(configPath, 'utf8');
+      hadConfig = true;
+      await writeFile(backupPath, await readFile(configPath, 'utf8'), 'utf8');
+    } catch {}
+
+    await writeFile(
+      configPath,
+      ['WORKER_BASE_URL=https://sub.050721.xyz', 'ADMIN_TOKEN=admin-token', ''].join('\n'),
+      'utf8',
+    );
+
+    const { stdout } = await execFile('bash', [path.join(clientRoot, 'bootstrap.sh')], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        HOME: homeDir,
+        SUBUP_INSTALL_DIR: installDir,
+        SUBUP_SKIP_DEPS: '1',
+        SUBUP_SKIP_CFST: '1',
+      },
+    });
+
+    const subupPath = path.join(installDir, 'subup');
+    const wrapper = await readFile(subupPath, 'utf8');
+    assert.match(stdout, /全局命令：/);
+    assert.match(stdout, /在任意目录执行：subup/);
+    assert.match(wrapper, /run-update\.sh/);
+    assert.match(wrapper, /config\.env/);
+  } finally {
+    const configPath = path.join(clientRoot, 'config.env');
+    const backupPath = path.join(tmpDir, 'config.backup');
+    try {
+      const backup = await readFile(backupPath, 'utf8');
+      await writeFile(configPath, backup, 'utf8');
+    } catch {
+      await rm(configPath, { force: true });
     }
     await rm(tmpDir, { recursive: true, force: true });
   }

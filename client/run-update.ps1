@@ -302,6 +302,18 @@ function Run-Cfst {
   & $CfstBin @args | Tee-Object -FilePath $LogFile | Out-Host
 }
 
+function Get-FixedUrls {
+  param([string]$WorkerBaseUrl)
+
+  $base = $WorkerBaseUrl.TrimEnd('/') + '/sub/fixed'
+  return @{
+    auto = $base
+    raw = "$base?target=raw"
+    clash = "$base?target=clash"
+    surge = "$base?target=surge"
+  }
+}
+
 function Parse-PreferredIps {
   param(
     [string]$ResultFile,
@@ -388,6 +400,7 @@ try {
     Fail-Client ($response | ConvertTo-Json -Depth 6)
   }
 
+  $publicFixedUrls = Get-FixedUrls -WorkerBaseUrl $workerBaseUrl
   $fixedTargetUrl = if ($response.fixedUrls.$outputFormat) { $response.fixedUrls.$outputFormat } else { $response.fixedUrls.auto }
 
   Write-Host ''
@@ -395,7 +408,15 @@ try {
   Write-Host "候选池总数：$candidateCount"
   Write-Host "测速成功数：$testedCount"
   Write-Host "最终 Top$topN 数量：$($preferredIps.Count)"
-  Write-Host "固定订阅：$fixedTargetUrl"
+  Write-Host '固定订阅地址：'
+  Write-Host "  自动：$($publicFixedUrls.auto)"
+  Write-Host "  Raw：$($publicFixedUrls.raw)"
+  Write-Host "  Clash：$($publicFixedUrls.clash)"
+  Write-Host "  Surge：$($publicFixedUrls.surge)"
+  Write-Host "默认推荐订阅地址（Clash）：$($publicFixedUrls.clash)"
+  if ($fixedTargetUrl -and $fixedTargetUrl -ne $publicFixedUrls.clash) {
+    Write-Host "鉴权直链 / 当前输出格式地址：$fixedTargetUrl"
+  }
   Write-Host '下一步：回到订阅客户端点击“更新订阅”。'
 }
 finally {
